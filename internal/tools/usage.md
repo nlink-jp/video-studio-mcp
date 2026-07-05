@@ -82,6 +82,16 @@ Japanese font and composited onto the frame; text wraps to the canvas width.
 Styling (font size, colors, box, margins) is set in the server's `[caption]`
 config. Default off.
 
+**Canvas override**: pass `width`/`height`/`fps` to override the output size for
+one render (dimensions must be even and ≥16). Produce the same deck as `16:9`
+(1920×1080), `9:16` vertical (1080×1920), or `1:1` (1080×1080) without changing
+server config. Images are always letter/pillar-boxed to fit, so mixed source
+sizes never distort.
+
+**Intermediates**: the per-page segments and caption PNGs under `output/tmp`
+are discarded after a successful render. Pass `keep_intermediates: true` to keep
+them (debugging).
+
 ## Error recovery
 
 | code | action |

@@ -104,6 +104,10 @@ Never `go build` directly — always `make build` (outputs to `dist/`).
   reusing json-to-table's pattern) + ffmpeg `overlay` — chosen over drawtext
   (ffmpeg here lacks libfreetype) and over a soft `mov_text` track (burn-in
   survives muted autoplay). Default off.
+- **ADR-0005**: per-call canvas override (`width`/`height`/`fps`, re-validated
+  via `VideoConfig.Validate`) for multi-aspect output, and discard of
+  `output/tmp` intermediates after a successful render (`keep_intermediates` to
+  keep).
 
 Full texts: [`docs/en/adr/`](docs/en/adr/) / [`docs/ja/adr/`](docs/ja/adr/).
 

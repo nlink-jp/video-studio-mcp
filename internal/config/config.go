@@ -121,22 +121,31 @@ func Load(path string) (*Config, error) {
 	return cfg, nil
 }
 
-func (c *Config) validate() error {
-	if c.Video.Width < 16 || c.Video.Height < 16 {
-		return fmt.Errorf("video.width/height must be >= 16, got %dx%d", c.Video.Width, c.Video.Height)
+// Validate checks the video parameters. It is exported so the master tool can
+// re-validate a config whose canvas has been overridden per call.
+func (v VideoConfig) Validate() error {
+	if v.Width < 16 || v.Height < 16 {
+		return fmt.Errorf("width/height must be >= 16, got %dx%d", v.Width, v.Height)
 	}
 	// yuv420p requires even dimensions.
-	if c.Video.Width%2 != 0 || c.Video.Height%2 != 0 {
-		return fmt.Errorf("video.width/height must be even, got %dx%d", c.Video.Width, c.Video.Height)
+	if v.Width%2 != 0 || v.Height%2 != 0 {
+		return fmt.Errorf("width/height must be even, got %dx%d", v.Width, v.Height)
 	}
-	if c.Video.FPS < 1 {
-		return fmt.Errorf("video.fps must be >= 1, got %d", c.Video.FPS)
+	if v.FPS < 1 {
+		return fmt.Errorf("fps must be >= 1, got %d", v.FPS)
 	}
-	if c.Video.CRF < 0 || c.Video.CRF > 51 {
-		return fmt.Errorf("video.crf must be within [0, 51], got %d", c.Video.CRF)
+	if v.CRF < 0 || v.CRF > 51 {
+		return fmt.Errorf("crf must be within [0, 51], got %d", v.CRF)
 	}
-	if c.Video.AudioSampleRate < 8000 {
-		return fmt.Errorf("video.audio_sample_rate must be >= 8000, got %d", c.Video.AudioSampleRate)
+	if v.AudioSampleRate < 8000 {
+		return fmt.Errorf("audio_sample_rate must be >= 8000, got %d", v.AudioSampleRate)
+	}
+	return nil
+}
+
+func (c *Config) validate() error {
+	if err := c.Video.Validate(); err != nil {
+		return fmt.Errorf("video.%w", err)
 	}
 	if c.Caption.FontSize <= 0 {
 		return fmt.Errorf("caption.font_size must be > 0, got %g", c.Caption.FontSize)

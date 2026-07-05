@@ -28,9 +28,10 @@ type Master struct {
 
 // Options control one Build call.
 type Options struct {
-	OutputName string // basename without extension; default: manifest file stem
-	Chapters   bool   // emit one per-page chapter marker in the MP4
-	Captions   bool   // burn each page's caption into the video
+	OutputName       string // basename without extension; default: manifest file stem
+	Chapters         bool   // emit one per-page chapter marker in the MP4
+	Captions         bool   // burn each page's caption into the video
+	KeepIntermediate bool   // keep output/tmp (segments, caption PNGs) after a successful render
 	// OnProgress, if set, is called as the render advances (phase, pages done,
 	// pages total). Used by the async job path; nil is a no-op.
 	OnProgress func(phase string, done, total int)
@@ -204,6 +205,13 @@ func (m *Master) Build(ctx context.Context, ws *workspace.Workspace, manifestSte
 	report("finalizing", len(items), len(items))
 	if err := m.runFFmpeg(ctx, concatArgs(ws.Path(listRel), metadataPath, ws.Path(outRel))); err != nil {
 		return Result{}, err
+	}
+
+	// Best-effort cleanup of the intermediates (segments, caption PNGs, concat
+	// list) now that the master exists. Left in place on failure (above) to aid
+	// debugging, or when the caller opts to keep them.
+	if !opts.KeepIntermediate {
+		_ = ws.RemoveAll(tmpRel)
 	}
 
 	return Result{

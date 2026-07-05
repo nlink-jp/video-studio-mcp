@@ -80,8 +80,8 @@
 
 - **非同期レンダリング `check_job`（実装済 2026-07-06, ADR-0003）** — `master async:true` でジョブ投入 →`check_job` で進捗/結果取得。
 - **字幕焼き込み（実装済 2026-07-06, ADR-0004）** — `master captions:true` で各ページ `caption` を常時表示で焼き込み（ミュート自動再生で表示）。当初の ffmpeg `drawtext` 案は実環境の ffmpeg が libfreetype 非対応のため断念し、**Go で字幕を透明 PNG に描画（json-to-table の M PLUS 1p/OFL パターン再利用）→ ffmpeg core `overlay` で合成**する方式を採用。→ drawtext 依存を排除。ソフト `mov_text` クローズドキャプションは将来の補完トグルとして残す。
-- フェード等トランジション（xfade）、解像度／アスペクト上書き
-- 中間セグメント保持／破棄オプション
+- **解像度／アスペクト上書き ＋ 中間物クリーンアップ（実装済 2026-07-06, ADR-0005）** — `master` の `width`/`height`/`fps` で per-call 上書き（16:9/9:16/1:1）、`output/tmp` は成功後に破棄（`keep_intermediates` で保持）。
+- フェード等トランジション（xfade）（残・要否再検討）
 - → 各機能を独立レビュー可
 
 ### Phase 3: Release

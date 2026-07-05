@@ -80,8 +80,8 @@ No `synthesize` equivalent (audio is voice-studio-mcp's responsibility). Composi
 
 - **Async rendering `check_job` (implemented 2026-07-06, ADR-0003)** — `master async:true` submits a job; `check_job` polls progress/result.
 - **Burned-in captions (implemented 2026-07-06, ADR-0004)** — `master captions:true` burns each page's `caption` in, always-on (visible in muted autoplay). The original ffmpeg `drawtext` plan was dropped because the real ffmpeg lacks libfreetype; instead captions are **rendered in Go to a transparent PNG (reusing json-to-table's M PLUS 1p / OFL pattern) and composited with ffmpeg's core `overlay`** — no drawtext dependency. A soft `mov_text` closed-caption track remains a possible future complementary toggle.
-- Fade and other transitions (xfade), resolution / aspect overrides
-- Keep/discard intermediate segments
+- **Resolution / aspect overrides + intermediate cleanup (implemented 2026-07-06, ADR-0005)** — `master` `width`/`height`/`fps` per-call override (16:9 / 9:16 / 1:1); `output/tmp` discarded after success (`keep_intermediates` to keep).
+- Fade and other transitions (xfade) (remaining; value under review)
 - → each feature independently reviewable
 
 ### Phase 3: Release

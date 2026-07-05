@@ -87,8 +87,17 @@ rejected with `path_not_allowed`).
 | Tool | Purpose |
 |------|---------|
 | `get_usage` | Return the operating manual (workspace model, manifest schema, recovery table). Call once before rendering. |
-| `master` | Build one MP4 from a page manifest. Args: `workspace_id`, `manifest_path`, optional `workspace_root`, `output_name`, `chapters` (default true), `captions` (default false), `async` (default false). |
+| `master` | Build one MP4 from a page manifest. Args: `workspace_id`, `manifest_path`, optional `workspace_root`, `output_name`, `chapters` (default true), `captions` (default false), `width`/`height`/`fps` (canvas override), `keep_intermediates` (default false), `async` (default false). |
 | `check_job` | Poll an async render: `state`, page progress, and — when `done` — the same result `master` returns synchronously. |
+
+### Output size / aspect
+
+The canvas defaults to the server's `[video]` config (1920×1080). Override it
+per render with `width`/`height`/`fps` (even dimensions ≥16) to produce the same
+deck as **16:9** (1920×1080), **9:16** vertical (1080×1920), or **1:1**
+(1080×1080) — useful for social distribution. Images are always
+letter/pillar-boxed to fit. The per-page intermediates under `output/tmp` are
+discarded after a successful render (`keep_intermediates: true` to keep them).
 
 ### Captions (burned-in)
 

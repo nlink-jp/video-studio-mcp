@@ -262,7 +262,7 @@ func TestBuildCaptions(t *testing.T) {
 	fr := &fakeRunner{dur: "1.000"}
 	m := newMaster(fr)
 
-	res, err := m.Build(context.Background(), ws, "deck", pages, Options{Captions: true})
+	res, err := m.Build(context.Background(), ws, "deck", pages, Options{Captions: true, KeepIntermediate: true})
 	if err != nil {
 		t.Fatalf("build: %v", err)
 	}
@@ -292,7 +292,7 @@ func TestBuildChapters(t *testing.T) {
 	fr := &fakeRunner{dur: "2.000"}
 	m := newMaster(fr)
 
-	res, err := m.Build(context.Background(), ws, "deck", twoPages, Options{Chapters: true})
+	res, err := m.Build(context.Background(), ws, "deck", twoPages, Options{Chapters: true, KeepIntermediate: true})
 	if err != nil {
 		t.Fatalf("build: %v", err)
 	}
@@ -325,7 +325,7 @@ func TestBuildChapterTitles(t *testing.T) {
 	ws := seed(t, pages)
 	m := newMaster(&fakeRunner{dur: "1.000"})
 
-	if _, err := m.Build(context.Background(), ws, "deck", pages, Options{Chapters: true}); err != nil {
+	if _, err := m.Build(context.Background(), ws, "deck", pages, Options{Chapters: true, KeepIntermediate: true}); err != nil {
 		t.Fatal(err)
 	}
 	meta, _ := os.ReadFile(ws.Path(workspace.DirOutput, "tmp", "ffmetadata.txt"))
@@ -360,5 +360,50 @@ func TestFFMetadataEscaping(t *testing.T) {
 	s := ffmetadata([]Chapter{{Title: "a=b;c#d", StartMS: 0, EndMS: 10}})
 	if !strings.Contains(s, `title=a\=b\;c\#d`) {
 		t.Errorf("escaping: %s", s)
+	}
+}
+
+func TestBuildCleansIntermediates(t *testing.T) {
+	ws := seed(t, twoPages)
+	m := newMaster(&fakeRunner{})
+	if _, err := m.Build(context.Background(), ws, "deck", twoPages, Options{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(ws.Path(workspace.DirOutput, "tmp")); !os.IsNotExist(err) {
+		t.Errorf("output/tmp should be removed after a successful render, err=%v", err)
+	}
+	// The master itself must remain.
+	if _, err := os.Stat(ws.Path(workspace.DirOutput, "deck.mp4")); err != nil {
+		t.Errorf("master missing: %v", err)
+	}
+}
+
+func TestBuildKeepIntermediates(t *testing.T) {
+	ws := seed(t, twoPages)
+	m := newMaster(&fakeRunner{})
+	if _, err := m.Build(context.Background(), ws, "deck", twoPages, Options{KeepIntermediate: true}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(ws.Path(workspace.DirOutput, "tmp")); err != nil {
+		t.Errorf("output/tmp should be kept, err=%v", err)
+	}
+}
+
+func TestBuildCanvasOverride(t *testing.T) {
+	ws := seed(t, twoPages)
+	fr := &fakeRunner{dur: "1.000"}
+	m := newMaster(fr)
+	m.Cfg.Width, m.Cfg.Height, m.Cfg.FPS = 1080, 1920, 24 // 9:16 vertical
+
+	res, err := m.Build(context.Background(), ws, "deck", twoPages, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Width != 1080 || res.Height != 1920 || res.FPS != 24 {
+		t.Errorf("result canvas: %+v", res)
+	}
+	seg := strings.Join(fr.cmds[2], " ")
+	if !strings.Contains(seg, "scale=1080:1920") || !strings.Contains(seg, "pad=1080:1920") {
+		t.Errorf("segment did not use overridden canvas: %s", seg)
 	}
 }

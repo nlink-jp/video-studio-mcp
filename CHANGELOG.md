@@ -24,6 +24,13 @@ All notable changes to this project are documented here. The format follows
   page progress and, when done, the full result. Jobs are in-memory
   (`internal/job`), not persisted; `job_not_found` guides recovery (re-run
   master). ADR-0003.
+- **Per-call canvas override** (Phase 2): `master` takes `width`/`height`/`fps`
+  to override the output size for one render (even dims ≥16), so the same deck
+  can be produced as 16:9 / 9:16 / 1:1 without touching server config. Invalid
+  overrides fail fast with `invalid_arguments`. ADR-0005.
+- **Intermediate cleanup** (Phase 2): per-page segments and caption PNGs under
+  `output/tmp` are now discarded after a successful render; `keep_intermediates:
+  true` retains them for debugging. (Previously `output/tmp` accumulated.)
 - **Burned-in captions** (Phase 2): `master` takes `captions: true` to burn each
   page's manifest `caption` into the video (always-on; visible in muted
   autoplay). Rendered in Go with the bundled **M PLUS 1p** font (SIL OFL 1.1,

@@ -243,6 +243,41 @@ func TestCheckJobNotFound(t *testing.T) {
 	}
 }
 
+func TestMasterCanvasOverride(t *testing.T) {
+	h := newHarness(t)
+	root := seedDeck(t, "deck")
+	out, err := h.call("master", map[string]any{
+		"workspace_id":   "deck",
+		"workspace_root": root,
+		"manifest_path":  "deck.jsonl",
+		"width":          1080,
+		"height":         1920,
+		"fps":            24,
+	})
+	if err != nil {
+		t.Fatalf("master: %v", err)
+	}
+	res := out.(master.Result)
+	if res.Width != 1080 || res.Height != 1920 || res.FPS != 24 {
+		t.Errorf("canvas override not applied: %+v", res)
+	}
+}
+
+func TestMasterInvalidOverride(t *testing.T) {
+	h := newHarness(t)
+	root := seedDeck(t, "deck")
+	_, err := h.call("master", map[string]any{
+		"workspace_id":   "deck",
+		"workspace_root": root,
+		"manifest_path":  "deck.jsonl",
+		"width":          1081, // odd → rejected before rendering
+	})
+	var te *toolerr.Error
+	if !errors.As(err, &te) || te.Code != toolerr.CodeInvalidArguments {
+		t.Fatalf("want invalid_arguments, got %v", err)
+	}
+}
+
 func TestGetUsage(t *testing.T) {
 	h := newHarness(t)
 	out, err := h.call("get_usage", map[string]any{})

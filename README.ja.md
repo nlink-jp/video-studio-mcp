@@ -84,8 +84,16 @@ output/            出力mp4 + tmp        （サーバーが書く）
 | ツール | 目的 |
 |------|---------|
 | `get_usage` | 操作マニュアル（ワークスペースモデル・マニフェストスキーマ・リカバリ表）を返す。レンダリング前に一度呼ぶ。 |
-| `master` | ページマニフェストから MP4 を1本生成。引数: `workspace_id`, `manifest_path`, 任意 `workspace_root`, `output_name`, `chapters`（既定 true）, `captions`（既定 false）, `async`（既定 false）。 |
+| `master` | ページマニフェストから MP4 を1本生成。引数: `workspace_id`, `manifest_path`, 任意 `workspace_root`, `output_name`, `chapters`（既定 true）, `captions`（既定 false）, `width`/`height`/`fps`（キャンバス上書き）, `keep_intermediates`（既定 false）, `async`（既定 false）。 |
 | `check_job` | 非同期レンダの進捗を取得: `state`・ページ進捗、`done` 時は `master` の同期結果と同じペイロード。 |
+
+### 出力サイズ / アスペクト
+
+キャンバスは既定でサーバー `[video]` 設定（1920×1080）。レンダごとに
+`width`/`height`/`fps`（偶数・16以上）で上書きし、同じデッキを **16:9**
+（1920×1080）・**9:16** 縦（1080×1920）・**1:1**（1080×1080）で出力できる ——
+SNS 配信に有用。画像は常にレター/ピラーボックスで収める。`output/tmp` の
+ページ中間物は成功後に破棄（`keep_intermediates: true` で保持）。
 
 ### 字幕（焼き込み）
 
