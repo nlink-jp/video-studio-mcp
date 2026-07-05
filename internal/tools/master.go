@@ -30,6 +30,7 @@ func registerMaster(srv *mcpserver.Server, d *Deps) {
     "output_name": {"type": "string", "description": "Output basename without extension (default: manifest file name)"},
     "chapters": {"type": "boolean", "description": "Emit one per-page chapter marker in the MP4 (default true); page title comes from the manifest \"title\" field, else \"Page N\""},
     "captions": {"type": "boolean", "description": "Burn each page's manifest \"caption\" into the video, always-on (default false). Styling is controlled by the server's [caption] config."},
+    "soft_captions": {"type": "boolean", "description": "Embed each page's manifest \"caption\" as a toggleable closed-caption track (mov_text soft subtitles) instead of/in addition to burning them in (default false). Player-rendered, no font needed."},
     "width": {"type": "integer", "description": "Override the output canvas width (even, >=16) for this render; e.g. 1080 with height 1920 for 9:16 vertical. Default: server [video] config."},
     "height": {"type": "integer", "description": "Override the output canvas height (even, >=16) for this render. Default: server [video] config."},
     "fps": {"type": "integer", "description": "Override the output frame rate (>=1) for this render. Default: server [video] config."},
@@ -46,6 +47,7 @@ func registerMaster(srv *mcpserver.Server, d *Deps) {
 			OutputName        string `json:"output_name"`
 			Chapters          *bool  `json:"chapters"`
 			Captions          *bool  `json:"captions"`
+			SoftCaptions      *bool  `json:"soft_captions"`
 			Width             *int   `json:"width"`
 			Height            *int   `json:"height"`
 			FPS               *int   `json:"fps"`
@@ -60,6 +62,7 @@ func registerMaster(srv *mcpserver.Server, d *Deps) {
 			chapters = *in.Chapters
 		}
 		captions := in.Captions != nil && *in.Captions
+		softCaptions := in.SoftCaptions != nil && *in.SoftCaptions
 		keepIntermediates := in.KeepIntermediates != nil && *in.KeepIntermediates
 		async := in.Async != nil && *in.Async
 
@@ -110,6 +113,7 @@ func registerMaster(srv *mcpserver.Server, d *Deps) {
 			OutputName:       in.OutputName,
 			Chapters:         chapters,
 			Captions:         captions,
+			SoftCaptions:     softCaptions,
 			KeepIntermediate: keepIntermediates,
 		}
 

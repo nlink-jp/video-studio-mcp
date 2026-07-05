@@ -58,10 +58,10 @@ output/            rendered mp4 + tmp    (server-written)
 Fields: `image` (required; workspace-relative still image), `audio`
 (required; workspace-relative narration audio — its duration sets the page's
 on-screen time), `title` (optional; the page's **chapter-marker** name —
-defaults to `Page N`), `caption` (optional; **burned into the video** when
-`master` is called with `captions: true` — always-on subtitle text, styled by
-the server's `[caption]` config; ignored when `captions` is off), `transition`
-(optional; `cut` default — `fade` is accepted but **rendered as a hard cut**).
+defaults to `Page N`), `caption` (optional; shown via `master`'s `captions`
+(burned-in) and/or `soft_captions` (toggleable track) — ignored when both are
+off), `transition` (optional; `cut` default — `fade` is accepted but **rendered
+as a hard cut**).
 
 Blank lines and lines starting with `#` are ignored.
 
@@ -76,11 +76,17 @@ By default the MP4 carries one **chapter marker per page** (title from the
 manifest `title` field, else `Page N`), so viewers can jump between slides in
 players that support chapters. Pass `chapters: false` to `master` to disable.
 
-Pass `captions: true` to **burn each page's `caption` into the video**
-(always-on, good for muted autoplay). Captions are rendered with a bundled
-Japanese font and composited onto the frame; text wraps to the canvas width.
-Styling (font size, colors, box, margins) is set in the server's `[caption]`
-config. Default off.
+The manifest `caption` can be shown two independent ways (both default off):
+
+- `captions: true` — **burn it into the video** (always-on pixels, good for
+  muted autoplay). Rendered with a bundled Japanese font and composited onto
+  the frame; text wraps to the canvas width; styling from the `[caption]` config.
+- `soft_captions: true` — embed it as a **toggleable closed-caption track**
+  (`mov_text`), which the viewer turns on/off and the player renders (no font
+  needed). Hidden by default in muted social autoplay.
+
+Enable both for burned-in pixels plus a selectable track. The result reports
+`captions_burned` and `soft_caption_cues` (pages that contributed to each).
 
 **Canvas override**: pass `width`/`height`/`fps` to override the output size for
 one render (dimensions must be even and ≥16). Produce the same deck as `16:9`

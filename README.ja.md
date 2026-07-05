@@ -84,7 +84,7 @@ output/            出力mp4 + tmp        （サーバーが書く）
 | ツール | 目的 |
 |------|---------|
 | `get_usage` | 操作マニュアル（ワークスペースモデル・マニフェストスキーマ・リカバリ表）を返す。レンダリング前に一度呼ぶ。 |
-| `master` | ページマニフェストから MP4 を1本生成。引数: `workspace_id`, `manifest_path`, 任意 `workspace_root`, `output_name`, `chapters`（既定 true）, `captions`（既定 false）, `width`/`height`/`fps`（キャンバス上書き）, `keep_intermediates`（既定 false）, `async`（既定 false）。 |
+| `master` | ページマニフェストから MP4 を1本生成。引数: `workspace_id`, `manifest_path`, 任意 `workspace_root`, `output_name`, `chapters`（既定 true）, `captions` / `soft_captions`（既定 false）, `width`/`height`/`fps`（キャンバス上書き）, `keep_intermediates`（既定 false）, `async`（既定 false）。 |
 | `check_job` | 非同期レンダの進捗を取得: `state`・ページ進捗、`done` 時は `master` の同期結果と同じペイロード。 |
 
 ### 出力サイズ / アスペクト
@@ -95,14 +95,19 @@ output/            出力mp4 + tmp        （サーバーが書く）
 SNS 配信に有用。画像は常にレター/ピラーボックスで収める。`output/tmp` の
 ページ中間物は成功後に破棄（`keep_intermediates: true` で保持）。
 
-### 字幕（焼き込み）
+### 字幕
 
-`captions: true` で各ページのマニフェスト `caption` を動画に焼き込む ——
-**常時表示の字幕**で、ソフト/クローズドキャプションと違い**ミュートの SNS
-自動再生でも表示される**。字幕は Go で同梱日本語フォント（M PLUS 1p）を用いて
-描画し、ffmpeg の core `overlay` フィルタで合成するため、`drawtext`/libfreetype
-無しの ffmpeg でも動作する。スタイル（フォントサイズ・色・ボックス・余白）は
-サーバーの `[caption]` 設定。既定 off。
+マニフェストの `caption` は2通りで表示できる（独立・どちらも既定 off）:
+
+- **焼き込み**（`captions: true`）— 常時表示のピクセル字幕。ミュートの SNS
+  自動再生でも見える。Go で同梱日本語フォント（M PLUS 1p）を描画し ffmpeg の
+  core `overlay` で合成するため、`drawtext`/libfreetype 無しの ffmpeg でも動作。
+  スタイル（フォントサイズ・色・ボックス・余白）はサーバーの `[caption]` 設定。
+- **クローズドキャプション**（`soft_captions: true`）— プレイヤーで ON/OFF できる
+  `mov_text` ソフト字幕トラック。プレイヤー描画・フォント不要。ミュート自動再生
+  では既定非表示だが、必要時に選択・アクセシブル。
+
+両方有効化すれば、焼き込みピクセル＋選択可能トラックの両立も可能。
 
 ### 非同期レンダリング
 

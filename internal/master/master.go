@@ -30,7 +30,8 @@ type Master struct {
 type Options struct {
 	OutputName       string // basename without extension; default: manifest file stem
 	Chapters         bool   // emit one per-page chapter marker in the MP4
-	Captions         bool   // burn each page's caption into the video
+	Captions         bool   // burn each page's caption into the video (always-on pixels)
+	SoftCaptions     bool   // embed each page's caption as a mov_text closed-caption track (toggleable)
 	KeepIntermediate bool   // keep output/tmp (segments, caption PNGs) after a successful render
 	// OnProgress, if set, is called as the render advances (phase, pages done,
 	// pages total). Used by the async job path; nil is a no-op.
@@ -44,6 +45,7 @@ type Result struct {
 	DurationSeconds float64 `json:"duration_seconds"`
 	Chapters        int     `json:"chapters"`
 	CaptionsBurned  int     `json:"captions_burned"`
+	SoftCaptionCues int     `json:"soft_caption_cues"`
 	Width           int     `json:"width"`
 	Height          int     `json:"height"`
 	FPS             int     `json:"fps"`
@@ -196,6 +198,23 @@ func (m *Master) Build(ctx context.Context, ws *workspace.Workspace, manifestSte
 		metadataPath = ws.Path(metaRel)
 	}
 
+	// 6b. Optional soft (closed-caption) subtitle track — an SRT muxed as
+	// mov_text; toggleable in the player, no burned pixels. Skipped when no page
+	// carries a caption.
+	subtitlePath := ""
+	softCaptionCues := 0
+	if opts.SoftCaptions {
+		srtText, cues := buildSRT(items)
+		softCaptionCues = cues
+		if cues > 0 {
+			subRel := filepath.Join(tmpRel, "captions.srt")
+			if err := ws.WriteFileAtomic(subRel, []byte(srtText)); err != nil {
+				return Result{}, err
+			}
+			subtitlePath = ws.Path(subRel)
+		}
+	}
+
 	// 7. Final concat encode (stream copy — segments share codec params).
 	name := opts.OutputName
 	if name == "" {
@@ -203,7 +222,7 @@ func (m *Master) Build(ctx context.Context, ws *workspace.Workspace, manifestSte
 	}
 	outRel := filepath.Join(workspace.DirOutput, name+".mp4")
 	report("finalizing", len(items), len(items))
-	if err := m.runFFmpeg(ctx, concatArgs(ws.Path(listRel), metadataPath, ws.Path(outRel))); err != nil {
+	if err := m.runFFmpeg(ctx, concatArgs(ws.Path(listRel), metadataPath, subtitlePath, ws.Path(outRel))); err != nil {
 		return Result{}, err
 	}
 
@@ -220,10 +239,31 @@ func (m *Master) Build(ctx context.Context, ws *workspace.Workspace, manifestSte
 		DurationSeconds: totalSec,
 		Chapters:        chapterCount,
 		CaptionsBurned:  captionsBurned,
+		SoftCaptionCues: softCaptionCues,
 		Width:           m.Cfg.Width,
 		Height:          m.Cfg.Height,
 		FPS:             m.Cfg.FPS,
 	}, nil
+}
+
+// buildSRT renders an SRT closed-caption track from the pages that carry a
+// caption, timed by the accumulated per-page durations (the same timeline as
+// chapters). Pages without a caption advance the clock but emit no cue.
+// Returns the SRT text and the number of cues.
+func buildSRT(items []resolved) (string, int) {
+	var b strings.Builder
+	cursorMS := 0
+	cues := 0
+	for _, it := range items {
+		startMS := cursorMS
+		cursorMS += int(it.durSec * 1000)
+		if strings.TrimSpace(it.caption) == "" {
+			continue
+		}
+		cues++
+		fmt.Fprintf(&b, "%d\n%s --> %s\n%s\n\n", cues, srtTime(startMS), srtTime(cursorMS), it.caption)
+	}
+	return b.String(), cues
 }
 
 // pageChapters derives one chapter per page from the accumulated segment

@@ -80,16 +80,21 @@ Never `go build` directly — always `make build` (outputs to `dist/`).
   (manifest parse) still happens synchronously before submit; asset/ffmpeg
   errors surface via `check_job`. Jobs are in-memory only — do not add
   persistence casually; `job_not_found` → re-run master.
-- **Captions are burned in via Go-rendered overlay, NOT drawtext** — this
-  ffmpeg has no `drawtext`/`subtitles` (no libfreetype/libass), and that can't be
-  assumed on user machines. So captions are rendered in Go (`internal/caption`,
-  M PLUS 1p) to a transparent PNG and composited with the core `overlay` filter.
-  `segmentArgs` switches to a `filter_complex` (`[0:v]scale/pad[bg];[bg][2:v]overlay=0:0[v]`
-  with explicit `-map [v] -map 1:a`) only when a page has a caption. The caption
-  PNG is canvas-sized (positioning baked in → `overlay=0:0`) and server-written
-  (trusted, no VerifyRegular). A soft `mov_text` closed-caption track could be
-  added later as a complementary toggle, but burn-in is the default because it
-  survives muted social autoplay.
+- **Two caption modes, independent flags** — `captions` (burn-in) and
+  `soft_captions` (closed-caption track) are separate booleans, both default off;
+  either or both can be on.
+  - **Burn-in** renders in Go (`internal/caption`, M PLUS 1p) to a transparent PNG
+    composited with the core `overlay` filter — NOT `drawtext` (this ffmpeg has no
+    libfreetype/libass, and users' may not either). `segmentArgs` switches to a
+    `filter_complex` (`[0:v]scale/pad[bg];[bg][2:v]overlay=0:0[v]` + explicit
+    `-map [v] -map 1:a`) only for pages with a caption; the PNG is canvas-sized
+    (positioning baked in) and server-written (no VerifyRegular).
+  - **Soft** builds an SRT (`buildSRT`, per-page timed by the same cumulative
+    durations as chapters) and muxes it as `mov_text` at the concat step.
+    `concatArgs` takes both `metadataPath` (chapters) and `subtitlePath`; extra
+    inputs get sequential indices after concat input 0, so the `-map` /
+    `-map_metadata` indices are computed, not hard-coded. Empty captions → no
+    track (`soft_caption_cues=0`).
 
 ## ADR cheat sheet
 
@@ -108,6 +113,9 @@ Never `go build` directly — always `make build` (outputs to `dist/`).
   via `VideoConfig.Validate`) for multi-aspect output, and discard of
   `output/tmp` intermediates after a successful render (`keep_intermediates` to
   keep).
+- **ADR-0006**: closed captions — `soft_captions` embeds a `mov_text` subtitle
+  track (SRT built per-page, muxed at concat); additive to the burn-in `captions`
+  flag; complementary (soft = toggleable/accessible, burn = muted-autoplay).
 
 Full texts: [`docs/en/adr/`](docs/en/adr/) / [`docs/ja/adr/`](docs/ja/adr/).
 

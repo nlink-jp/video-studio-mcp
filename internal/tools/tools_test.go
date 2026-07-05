@@ -278,6 +278,31 @@ func TestMasterInvalidOverride(t *testing.T) {
 	}
 }
 
+func TestMasterSoftCaptions(t *testing.T) {
+	h := newHarness(t)
+	root := seedDeck(t, "deck")
+	man := `{"image":"images/p01.png","audio":"audio/p01.wav","caption":"字幕A"}` + "\n" +
+		`{"image":"images/p02.png","audio":"audio/p02.wav","caption":"字幕B"}` + "\n"
+	writeFile(t, filepath.Join(root, "deck", "deck.jsonl"), man)
+
+	out, err := h.call("master", map[string]any{
+		"workspace_id":   "deck",
+		"workspace_root": root,
+		"manifest_path":  "deck.jsonl",
+		"soft_captions":  true,
+	})
+	if err != nil {
+		t.Fatalf("master: %v", err)
+	}
+	res := out.(master.Result)
+	if res.SoftCaptionCues != 2 {
+		t.Errorf("soft_caption_cues: %d (want 2)", res.SoftCaptionCues)
+	}
+	if _, err := os.Stat(res.MasterPath); err != nil {
+		t.Errorf("output missing: %v", err)
+	}
+}
+
 func TestGetUsage(t *testing.T) {
 	h := newHarness(t)
 	out, err := h.call("get_usage", map[string]any{})

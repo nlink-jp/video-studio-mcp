@@ -4,6 +4,16 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Closed captions** (soft subtitle track): `master` takes `soft_captions: true`
+  to embed each page's manifest `caption` as a toggleable `mov_text` track
+  (per-page timed cues built as SRT, muxed at the concat step). Player-rendered,
+  no font needed — complements burned-in `captions` (which stays visible in muted
+  autoplay); enable either or both. Result reports `soft_caption_cues`. ADR-0006.
+
 ## [0.1.0] - 2026-07-06
 
 First release. Presentation-video compositor MCP server: page manifest

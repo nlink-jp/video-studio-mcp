@@ -57,25 +57,53 @@ func segmentArgs(v config.VideoConfig, imgPath, audioPath, capPath string, durSe
 // concatArgs builds the final concat-demuxer invocation that joins the
 // per-page segments by stream copy (they share identical codec parameters).
 //
-// metadataPath is an ffmetadata chapter file; empty disables chapters. When
-// present, all streams are mapped from the concat input (0) and the global
-// metadata (chapters) is taken from the metadata input (1).
-func concatArgs(listPath, metadataPath, outPath string) []string {
+// metadataPath is an ffmetadata chapter file; subtitlePath is an SRT
+// closed-caption file. Either or both may be empty. Any extra inputs get
+// sequential indices after the concat input (0); the concat streams are always
+// mapped, the subtitle is transcoded to mov_text (the MP4 soft-subtitle codec),
+// and the chapters are taken as global metadata.
+func concatArgs(listPath, metadataPath, subtitlePath, outPath string) []string {
 	args := []string{
 		"-y",
 		"-f", "concat",
 		"-safe", "0",
 		"-i", listPath,
 	}
-	if metadataPath != "" {
-		args = append(args, "-i", metadataPath, "-map", "0", "-map_metadata", "1")
+	idx := 1
+	subIdx, metaIdx := -1, -1
+	if subtitlePath != "" {
+		args = append(args, "-i", subtitlePath)
+		subIdx = idx
+		idx++
 	}
-	args = append(args,
-		"-c", "copy",
-		"-movflags", "+faststart",
-		outPath,
-	)
-	return args
+	if metadataPath != "" {
+		args = append(args, "-i", metadataPath)
+		metaIdx = idx
+		idx++
+	}
+	args = append(args, "-map", "0")
+	if subIdx >= 0 {
+		args = append(args, "-map", strconv.Itoa(subIdx))
+	}
+	if metaIdx >= 0 {
+		args = append(args, "-map_metadata", strconv.Itoa(metaIdx))
+	}
+	args = append(args, "-c", "copy")
+	if subIdx >= 0 {
+		args = append(args, "-c:s", "mov_text")
+	}
+	return append(args, "-movflags", "+faststart", outPath)
+}
+
+// srtTime formats a millisecond offset as an SRT timestamp (HH:MM:SS,mmm).
+func srtTime(ms int) string {
+	h := ms / 3600000
+	ms %= 3600000
+	m := ms / 60000
+	ms %= 60000
+	s := ms / 1000
+	ms %= 1000
+	return fmt.Sprintf("%02d:%02d:%02d,%03d", h, m, s, ms)
 }
 
 // Chapter is one page's navigation marker (times in milliseconds).

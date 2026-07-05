@@ -407,3 +407,97 @@ func TestBuildCanvasOverride(t *testing.T) {
 		t.Errorf("segment did not use overridden canvas: %s", seg)
 	}
 }
+
+func TestSRTTime(t *testing.T) {
+	cases := map[int]string{
+		0:       "00:00:00,000",
+		1500:    "00:00:01,500",
+		61001:   "00:01:01,001",
+		3723456: "01:02:03,456",
+	}
+	for ms, want := range cases {
+		if got := srtTime(ms); got != want {
+			t.Errorf("srtTime(%d) = %q, want %q", ms, got, want)
+		}
+	}
+}
+
+func TestBuildSRT(t *testing.T) {
+	items := []resolved{
+		{caption: "最初のページ", durSec: 2.0},
+		{caption: "", durSec: 1.0}, // no caption: advances clock, no cue
+		{caption: "三枚目", durSec: 1.5},
+	}
+	srt, cues := buildSRT(items)
+	if cues != 2 {
+		t.Fatalf("cues: %d (want 2)", cues)
+	}
+	// Cue 1 spans [0, 2.0); cue 2 (page 3) spans [3.0, 4.5).
+	for _, want := range []string{
+		"1\n00:00:00,000 --> 00:00:02,000\n最初のページ",
+		"2\n00:00:03,000 --> 00:00:04,500\n三枚目",
+	} {
+		if !strings.Contains(srt, want) {
+			t.Errorf("srt missing cue:\n%s\n--- got ---\n%s", want, srt)
+		}
+	}
+}
+
+func TestConcatArgsSubtitleAndChapters(t *testing.T) {
+	// Subtitle only: input 1 is the srt, mapped and transcoded to mov_text.
+	sub := strings.Join(concatArgs("/list.txt", "", "/c.srt", "/o.mp4"), " ")
+	for _, want := range []string{"-i /c.srt", "-map 0", "-map 1", "-c copy", "-c:s mov_text"} {
+		if !strings.Contains(sub, want) {
+			t.Errorf("subtitle concat missing %q: %s", want, sub)
+		}
+	}
+	if strings.Contains(sub, "map_metadata") {
+		t.Errorf("no chapters must not map metadata: %s", sub)
+	}
+	// Subtitle + chapters: srt is input 1, metadata is input 2.
+	both := strings.Join(concatArgs("/list.txt", "/m.txt", "/c.srt", "/o.mp4"), " ")
+	for _, want := range []string{"-i /c.srt", "-i /m.txt", "-map 1", "-map_metadata 2", "-c:s mov_text"} {
+		if !strings.Contains(both, want) {
+			t.Errorf("subtitle+chapters concat missing %q: %s", want, both)
+		}
+	}
+}
+
+func TestBuildSoftCaptions(t *testing.T) {
+	pages := []manifest.Page{
+		{Image: "images/p01.png", Audio: "audio/p01.wav", Caption: "字幕1"},
+		{Image: "images/p02.png", Audio: "audio/p02.wav"}, // no caption
+	}
+	ws := seed(t, pages)
+	fr := &fakeRunner{dur: "1.000"}
+	m := newMaster(fr)
+
+	res, err := m.Build(context.Background(), ws, "deck", pages, Options{SoftCaptions: true, KeepIntermediate: true})
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	if res.SoftCaptionCues != 1 {
+		t.Errorf("soft_caption_cues: %d (want 1)", res.SoftCaptionCues)
+	}
+	if _, err := os.Stat(ws.Path(workspace.DirOutput, "tmp", "captions.srt")); err != nil {
+		t.Errorf("captions.srt not written: %v", err)
+	}
+	concat := strings.Join(fr.cmds[len(fr.cmds)-1], " ")
+	if !strings.Contains(concat, "-c:s mov_text") || !strings.Contains(concat, "captions.srt") {
+		t.Errorf("concat did not mux the soft-caption track: %s", concat)
+	}
+	// No page carries a caption → no srt, no subtitle track.
+	ws2 := seed(t, twoPages)
+	fr2 := &fakeRunner{}
+	m2 := newMaster(fr2)
+	res2, err := m2.Build(context.Background(), ws2, "deck", twoPages, Options{SoftCaptions: true, KeepIntermediate: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res2.SoftCaptionCues != 0 {
+		t.Errorf("cues without captions: %d", res2.SoftCaptionCues)
+	}
+	if strings.Contains(strings.Join(fr2.cmds[len(fr2.cmds)-1], " "), "mov_text") {
+		t.Errorf("no captions must not add a subtitle track")
+	}
+}

@@ -87,7 +87,7 @@ rejected with `path_not_allowed`).
 | Tool | Purpose |
 |------|---------|
 | `get_usage` | Return the operating manual (workspace model, manifest schema, recovery table). Call once before rendering. |
-| `master` | Build one MP4 from a page manifest. Args: `workspace_id`, `manifest_path`, optional `workspace_root`, `output_name`, `chapters` (default true), `captions` (default false), `width`/`height`/`fps` (canvas override), `keep_intermediates` (default false), `async` (default false). |
+| `master` | Build one MP4 from a page manifest. Args: `workspace_id`, `manifest_path`, optional `workspace_root`, `output_name`, `chapters` (default true), `captions` / `soft_captions` (default false), `width`/`height`/`fps` (canvas override), `keep_intermediates` (default false), `async` (default false). |
 | `check_job` | Poll an async render: `state`, page progress, and — when `done` — the same result `master` returns synchronously. |
 
 ### Output size / aspect
@@ -99,15 +99,20 @@ deck as **16:9** (1920×1080), **9:16** vertical (1080×1920), or **1:1**
 letter/pillar-boxed to fit. The per-page intermediates under `output/tmp` are
 discarded after a successful render (`keep_intermediates: true` to keep them).
 
-### Captions (burned-in)
+### Captions
 
-Pass `captions: true` to burn each page's manifest `caption` into the video —
-**always-on subtitle text**, which (unlike a soft/closed-caption track) stays
-visible in muted social autoplay. Captions are rendered in Go with a bundled
-Japanese font (M PLUS 1p) and composited via ffmpeg's core `overlay` filter, so
-they work even on an ffmpeg built without `drawtext`/libfreetype. Styling —
-font size, colors, box, margins — is set in the server's `[caption]` config;
-default off.
+The manifest `caption` can be shown two independent ways (both default off):
+
+- **Burned-in** (`captions: true`) — always-on subtitle pixels, visible even in
+  muted social autoplay. Rendered in Go with a bundled Japanese font (M PLUS 1p)
+  and composited via ffmpeg's core `overlay` filter, so it works even on an
+  ffmpeg built without `drawtext`/libfreetype. Styling — font size, colors, box,
+  margins — is set in the server's `[caption]` config.
+- **Closed captions** (`soft_captions: true`) — a toggleable `mov_text` subtitle
+  track the viewer turns on/off; player-rendered, no font needed. Hidden by
+  default in muted autoplay, but selectable and accessible on demand.
+
+Enable both for burned-in pixels plus a selectable track.
 
 ### Async rendering
 
