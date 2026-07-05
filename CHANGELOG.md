@@ -24,6 +24,12 @@ All notable changes to this project are documented here. The format follows
   page progress and, when done, the full result. Jobs are in-memory
   (`internal/job`), not persisted; `job_not_found` guides recovery (re-run
   master). ADR-0003.
+- **Burned-in captions** (Phase 2): `master` takes `captions: true` to burn each
+  page's manifest `caption` into the video (always-on; visible in muted
+  autoplay). Rendered in Go with the bundled **M PLUS 1p** font (SIL OFL 1.1,
+  `internal/caption`) to a transparent overlay and composited with ffmpeg's core
+  `overlay` — no `drawtext`/libfreetype required. Styling via `[caption]` config;
+  default off. ADR-0004.
 - `get_usage` tool — embedded operating manual (`internal/tools/usage.md`),
   coherence-tested against the real tool/error/schema surface.
 - Page manifest JSONL parser (`internal/manifest`) with strict decode and

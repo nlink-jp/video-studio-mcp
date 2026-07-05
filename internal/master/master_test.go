@@ -52,12 +52,12 @@ func isProbe(args []string) bool {
 }
 
 func newMaster(r Runner) *Master {
-	cfg := config.Default().Video
+	cfg := config.Default()
 	// Real binaries need not exist for the fake runner, but Build's LookPath
 	// guard runs first; point it at something that exists.
-	cfg.FFmpegPath = "/bin/ls"
-	cfg.FFprobePath = "/bin/ls"
-	return &Master{Runner: r, Cfg: cfg}
+	cfg.Video.FFmpegPath = "/bin/ls"
+	cfg.Video.FFprobePath = "/bin/ls"
+	return &Master{Runner: r, Cfg: cfg.Video, Caption: cfg.Caption}
 }
 
 // seed writes each page's image and audio as real files inside a fresh
@@ -231,12 +231,59 @@ func TestConcatListQuoting(t *testing.T) {
 func TestSegmentArgsPadColor(t *testing.T) {
 	v := config.Default().Video
 	v.Background = "white"
-	args := strings.Join(segmentArgs(v, "/i.png", "/a.wav", 1.25, "/o.mp4"), " ")
+	args := strings.Join(segmentArgs(v, "/i.png", "/a.wav", "", 1.25, "/o.mp4"), " ")
 	if !strings.Contains(args, "pad=1920:1080:(ow-iw)/2:(oh-ih)/2:white") {
 		t.Errorf("pad color not applied: %s", args)
 	}
 	if !strings.Contains(args, "-t 1.250") {
 		t.Errorf("duration not applied: %s", args)
+	}
+	if !strings.Contains(args, "-vf ") || strings.Contains(args, "filter_complex") {
+		t.Errorf("no-caption segment should use -vf, not filter_complex: %s", args)
+	}
+}
+
+func TestSegmentArgsCaptionOverlay(t *testing.T) {
+	v := config.Default().Video
+	args := strings.Join(segmentArgs(v, "/i.png", "/a.wav", "/c.png", 1.0, "/o.mp4"), " ")
+	for _, want := range []string{"-i /c.png", "-filter_complex", "overlay=0:0", "-map [v]", "-map 1:a"} {
+		if !strings.Contains(args, want) {
+			t.Errorf("caption segment missing %q: %s", want, args)
+		}
+	}
+}
+
+func TestBuildCaptions(t *testing.T) {
+	pages := []manifest.Page{
+		{Image: "images/p01.png", Audio: "audio/p01.wav", Caption: "字幕テスト"},
+		{Image: "images/p02.png", Audio: "audio/p02.wav"}, // no caption
+	}
+	ws := seed(t, pages)
+	fr := &fakeRunner{dur: "1.000"}
+	m := newMaster(fr)
+
+	res, err := m.Build(context.Background(), ws, "deck", pages, Options{Captions: true})
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	if res.CaptionsBurned != 1 {
+		t.Errorf("captions_burned: %d (want 1)", res.CaptionsBurned)
+	}
+	if _, err := os.Stat(ws.Path(workspace.DirOutput, "tmp", "cap_001.png")); err != nil {
+		t.Errorf("caption png for page 1 missing: %v", err)
+	}
+	if _, err := os.Stat(ws.Path(workspace.DirOutput, "tmp", "cap_002.png")); !os.IsNotExist(err) {
+		t.Errorf("page 2 (no caption) should have no png, err=%v", err)
+	}
+	var seg1 string
+	for _, c := range fr.cmds {
+		j := strings.Join(c, " ")
+		if strings.Contains(j, "seg_001.mp4") {
+			seg1 = j
+		}
+	}
+	if !strings.Contains(seg1, "cap_001.png") || !strings.Contains(seg1, "overlay=0:0") {
+		t.Errorf("page 1 segment did not overlay its caption: %s", seg1)
 	}
 }
 

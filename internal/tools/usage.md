@@ -58,9 +58,10 @@ output/            rendered mp4 + tmp    (server-written)
 Fields: `image` (required; workspace-relative still image), `audio`
 (required; workspace-relative narration audio — its duration sets the page's
 on-screen time), `title` (optional; the page's **chapter-marker** name —
-defaults to `Page N`), `caption` (optional; **reserved for Phase 2** subtitle
-burn-in — accepted but not yet rendered), `transition` (optional; `cut`
-default — `fade` is accepted but **rendered as a hard cut in Phase 1**).
+defaults to `Page N`), `caption` (optional; **burned into the video** when
+`master` is called with `captions: true` — always-on subtitle text, styled by
+the server's `[caption]` config; ignored when `captions` is off), `transition`
+(optional; `cut` default — `fade` is accepted but **rendered as a hard cut**).
 
 Blank lines and lines starting with `#` are ignored.
 
@@ -75,6 +76,12 @@ By default the MP4 carries one **chapter marker per page** (title from the
 manifest `title` field, else `Page N`), so viewers can jump between slides in
 players that support chapters. Pass `chapters: false` to `master` to disable.
 
+Pass `captions: true` to **burn each page's `caption` into the video**
+(always-on, good for muted autoplay). Captions are rendered with a bundled
+Japanese font and composited onto the frame; text wraps to the canvas width.
+Styling (font size, colors, box, margins) is set in the server's `[caption]`
+config. Default off.
+
 ## Error recovery
 
 | code | action |
@@ -84,6 +91,7 @@ players that support chapters. Pass `chapters: false` to `master` to disable.
 | ffmpeg_not_found | the user must install ffmpeg (ffprobe ships with it) |
 | ffmpeg_failed | inspect details.stderr_tail; a bad image/audio input → fix that page, retry |
 | probe_failed | the page audio is unreadable by ffprobe; re-supply that audio file |
+| caption_failed | a caption could not be rendered; check the `[caption]` config (e.g. font_color/box_color) |
 | path_not_allowed | use workspace-relative asset paths / a valid absolute workspace_root; symlinks out of the workspace are rejected |
 | invalid_workspace_id | match [a-zA-Z0-9_-]{1,64} |
 | job_not_found | the server restarted (async jobs are in-memory); re-run master (it re-renders from the same workspace) |

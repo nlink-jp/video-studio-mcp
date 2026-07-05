@@ -79,7 +79,7 @@ No `synthesize` equivalent (audio is voice-studio-mcp's responsibility). Composi
 ### Phase 2: Features
 
 - **Async rendering `check_job` (implemented 2026-07-06, ADR-0003)** — `master async:true` submits a job; `check_job` polls progress/result.
-- Captions (`caption`) — **approach changed: instead of burn-in + bundled CJK font, use a closed-caption (`mov_text` soft subtitle track)**. Reason: the real ffmpeg here has no `drawtext`/`subtitles` (libfreetype/libass), and that cannot be assumed on user machines either. A soft subtitle track needs only core muxing, which **removes the CJK-font bundle and the OFL dependency**. To be finalized in ADR-0004 when implemented.
+- **Burned-in captions (implemented 2026-07-06, ADR-0004)** — `master captions:true` burns each page's `caption` in, always-on (visible in muted autoplay). The original ffmpeg `drawtext` plan was dropped because the real ffmpeg lacks libfreetype; instead captions are **rendered in Go to a transparent PNG (reusing json-to-table's M PLUS 1p / OFL pattern) and composited with ffmpeg's core `overlay`** — no drawtext dependency. A soft `mov_text` closed-caption track remains a possible future complementary toggle.
 - Fade and other transitions (xfade), resolution / aspect overrides
 - Keep/discard intermediate segments
 - → each feature independently reviewable

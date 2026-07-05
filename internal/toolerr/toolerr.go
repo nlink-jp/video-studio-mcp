@@ -65,6 +65,7 @@ const (
 	CodeInvalidManifest    = "invalid_manifest"
 	CodeManifestIncomplete = "manifest_incomplete"
 	CodeProbeFailed        = "probe_failed"
+	CodeCaptionFailed      = "caption_failed"
 	CodeFFmpegFailed       = "ffmpeg_failed"
 	CodeFFmpegNotFound     = "ffmpeg_not_found"
 	CodeJobNotFound        = "job_not_found"

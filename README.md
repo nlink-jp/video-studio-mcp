@@ -87,8 +87,18 @@ rejected with `path_not_allowed`).
 | Tool | Purpose |
 |------|---------|
 | `get_usage` | Return the operating manual (workspace model, manifest schema, recovery table). Call once before rendering. |
-| `master` | Build one MP4 from a page manifest. Args: `workspace_id`, `manifest_path`, optional `workspace_root`, `output_name`, `chapters` (default true), `async` (default false). |
+| `master` | Build one MP4 from a page manifest. Args: `workspace_id`, `manifest_path`, optional `workspace_root`, `output_name`, `chapters` (default true), `captions` (default false), `async` (default false). |
 | `check_job` | Poll an async render: `state`, page progress, and — when `done` — the same result `master` returns synchronously. |
+
+### Captions (burned-in)
+
+Pass `captions: true` to burn each page's manifest `caption` into the video —
+**always-on subtitle text**, which (unlike a soft/closed-caption track) stays
+visible in muted social autoplay. Captions are rendered in Go with a bundled
+Japanese font (M PLUS 1p) and composited via ffmpeg's core `overlay` filter, so
+they work even on an ffmpeg built without `drawtext`/libfreetype. Styling —
+font size, colors, box, margins — is set in the server's `[caption]` config;
+default off.
 
 ### Async rendering
 
@@ -109,10 +119,10 @@ restart (an unknown `job_id` returns `job_not_found` — just re-run `master`).
 - `audio` (required) — workspace-relative narration audio; its duration sets the
   page's on-screen time.
 - `title` (optional) — the page's **chapter-marker** name (default `Page N`).
-- `caption` (optional) — **Phase 2**: subtitle burn-in. Accepted but not yet
-  rendered.
+- `caption` (optional) — subtitle text **burned into the video** when `master`
+  is called with `captions: true` (ignored otherwise).
 - `transition` (optional) — `cut` (default). `fade` is accepted but rendered as
-  a hard cut in Phase 1.
+  a hard cut.
 
 Blank lines and `#` comment lines are ignored.
 
@@ -143,7 +153,14 @@ and the pad `background` color are all configurable.
 - [RFP](docs/en/video-studio-mcp-rfp.md) — approved scope; canonical source for
   design decisions.
 
+## Fonts
+
+This tool bundles the **M PLUS 1p** font
+([internal/caption/fonts/MPLUS1p-Regular.ttf](internal/caption/fonts/MPLUS1p-Regular.ttf))
+for burned-in captions, licensed under the SIL Open Font License, Version 1.1.
+We are grateful to the M+ FONTS Project for this excellent font. See
+[FONTS_LICENSE](FONTS_LICENSE).
+
 ## License
 
-See the repository license. Bundled fonts (Phase 2, for caption burn-in) will
-carry their own OFL attribution.
+See the repository license.

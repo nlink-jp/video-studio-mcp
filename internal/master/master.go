@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/nlink-jp/video-studio-mcp/internal/caption"
 	"github.com/nlink-jp/video-studio-mcp/internal/config"
 	"github.com/nlink-jp/video-studio-mcp/internal/manifest"
 	"github.com/nlink-jp/video-studio-mcp/internal/toolerr"
@@ -20,14 +21,16 @@ const stderrTailBytes = 512
 
 // Master renders the final presentation video for a page manifest.
 type Master struct {
-	Runner Runner
-	Cfg    config.VideoConfig
+	Runner  Runner
+	Cfg     config.VideoConfig
+	Caption config.CaptionConfig
 }
 
 // Options control one Build call.
 type Options struct {
 	OutputName string // basename without extension; default: manifest file stem
 	Chapters   bool   // emit one per-page chapter marker in the MP4
+	Captions   bool   // burn each page's caption into the video
 	// OnProgress, if set, is called as the render advances (phase, pages done,
 	// pages total). Used by the async job path; nil is a no-op.
 	OnProgress func(phase string, done, total int)
@@ -39,17 +42,19 @@ type Result struct {
 	Pages           int     `json:"pages"`
 	DurationSeconds float64 `json:"duration_seconds"`
 	Chapters        int     `json:"chapters"`
+	CaptionsBurned  int     `json:"captions_burned"`
 	Width           int     `json:"width"`
 	Height          int     `json:"height"`
 	FPS             int     `json:"fps"`
 }
 
 // resolved is one page with its workspace-relative asset paths, chapter title,
-// and probed audio duration.
+// caption text, and probed audio duration.
 type resolved struct {
 	imgRel   string
 	audioRel string
 	title    string
+	caption  string
 	durSec   float64
 }
 
@@ -106,7 +111,7 @@ func (m *Master) Build(ctx context.Context, ws *workspace.Workspace, manifestSte
 			missing = append(missing, miss)
 			continue
 		}
-		items = append(items, resolved{imgRel: imgRel, audioRel: audioRel, title: p.Title})
+		items = append(items, resolved{imgRel: imgRel, audioRel: audioRel, title: p.Title, caption: p.Caption})
 	}
 	if len(missing) > 0 {
 		return Result{}, toolerr.Newf(toolerr.CodeManifestIncomplete,
@@ -136,11 +141,27 @@ func (m *Master) Build(ctx context.Context, ws *workspace.Workspace, manifestSte
 
 	// 4. Render one segment per page. ffmpeg cannot inherit os.Root, so the
 	// image/audio inputs verified in step 1 are handed over as absolute paths.
+	// When captions are enabled, each non-empty caption is rendered to a
+	// server-written transparent PNG and composited via overlay.
 	report("rendering", 0, len(items))
 	segRels := make([]string, 0, len(items))
+	captionsBurned := 0
 	for i := range items {
+		capPath := ""
+		if opts.Captions && strings.TrimSpace(items[i].caption) != "" {
+			png, err := caption.Render(m.Caption, items[i].caption, m.Cfg.Width, m.Cfg.Height)
+			if err != nil {
+				return Result{}, toolerr.Newf(toolerr.CodeCaptionFailed, "render caption for page %d: %v", i+1, err)
+			}
+			capRel := filepath.Join(tmpRel, fmt.Sprintf("cap_%03d.png", i+1))
+			if err := ws.WriteFileAtomic(capRel, png); err != nil {
+				return Result{}, err
+			}
+			capPath = ws.Path(capRel)
+			captionsBurned++
+		}
 		segRel := filepath.Join(tmpRel, fmt.Sprintf("seg_%03d.mp4", i+1))
-		args := segmentArgs(m.Cfg, ws.Path(items[i].imgRel), ws.Path(items[i].audioRel), items[i].durSec, ws.Path(segRel))
+		args := segmentArgs(m.Cfg, ws.Path(items[i].imgRel), ws.Path(items[i].audioRel), capPath, items[i].durSec, ws.Path(segRel))
 		if err := m.runFFmpeg(ctx, args); err != nil {
 			return Result{}, err
 		}
@@ -190,6 +211,7 @@ func (m *Master) Build(ctx context.Context, ws *workspace.Workspace, manifestSte
 		Pages:           len(items),
 		DurationSeconds: totalSec,
 		Chapters:        chapterCount,
+		CaptionsBurned:  captionsBurned,
 		Width:           m.Cfg.Width,
 		Height:          m.Cfg.Height,
 		FPS:             m.Cfg.FPS,

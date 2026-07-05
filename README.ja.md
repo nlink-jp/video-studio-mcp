@@ -84,8 +84,17 @@ output/            出力mp4 + tmp        （サーバーが書く）
 | ツール | 目的 |
 |------|---------|
 | `get_usage` | 操作マニュアル（ワークスペースモデル・マニフェストスキーマ・リカバリ表）を返す。レンダリング前に一度呼ぶ。 |
-| `master` | ページマニフェストから MP4 を1本生成。引数: `workspace_id`, `manifest_path`, 任意 `workspace_root`, `output_name`, `chapters`（既定 true）, `async`（既定 false）。 |
+| `master` | ページマニフェストから MP4 を1本生成。引数: `workspace_id`, `manifest_path`, 任意 `workspace_root`, `output_name`, `chapters`（既定 true）, `captions`（既定 false）, `async`（既定 false）。 |
 | `check_job` | 非同期レンダの進捗を取得: `state`・ページ進捗、`done` 時は `master` の同期結果と同じペイロード。 |
+
+### 字幕（焼き込み）
+
+`captions: true` で各ページのマニフェスト `caption` を動画に焼き込む ——
+**常時表示の字幕**で、ソフト/クローズドキャプションと違い**ミュートの SNS
+自動再生でも表示される**。字幕は Go で同梱日本語フォント（M PLUS 1p）を用いて
+描画し、ffmpeg の core `overlay` フィルタで合成するため、`drawtext`/libfreetype
+無しの ffmpeg でも動作する。スタイル（フォントサイズ・色・ボックス・余白）は
+サーバーの `[caption]` 設定。既定 off。
 
 ### 非同期レンダリング
 
@@ -105,8 +114,8 @@ output/            出力mp4 + tmp        （サーバーが書く）
 - `image`（必須）— ワークスペース相対の静止画（PNG/JPG）。
 - `audio`（必須）— ワークスペース相対のナレーション音声。その長さがページの表示時間。
 - `title`（任意）— そのページの**チャプターマーカー**名（既定 `Page N`）。
-- `caption`（任意）— **Phase 2**: 字幕焼き込み。受理するが未描画。
-- `transition`（任意）— `cut`（既定）。`fade` は受理するが Phase 1 ではハードカット。
+- `caption`（任意）— `master` を `captions: true` で呼んだとき動画に**焼き込む**字幕テキスト（off 時は無視）。
+- `transition`（任意）— `cut`（既定）。`fade` は受理するがハードカット。
 
 空行と `#` 始まりのコメント行は無視。
 
@@ -135,7 +144,14 @@ output/            出力mp4 + tmp        （サーバーが書く）
 - [ADR-0001: 2フェーズレンダリングパイプライン](docs/ja/adr/0001-render-pipeline.ja.md)。
 - [RFP](docs/ja/video-studio-mcp-rfp.ja.md) — 承認済みスコープ。設計判断の正典。
 
+## フォント
+
+本ツールは字幕焼き込み用に **M PLUS 1p** フォント
+（[internal/caption/fonts/MPLUS1p-Regular.ttf](internal/caption/fonts/MPLUS1p-Regular.ttf)）
+を同梱している。SIL Open Font License, Version 1.1 のもとでライセンスされている。
+素晴らしいフォントを提供してくださった M+ FONTS Project に感謝します。
+[FONTS_LICENSE](FONTS_LICENSE) 参照。
+
 ## ライセンス
 
-リポジトリのライセンス参照。同梱フォント（Phase 2・字幕焼き込み用）は各自の
-OFL 帰属表記を伴う。
+リポジトリのライセンス参照。

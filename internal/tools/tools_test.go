@@ -267,8 +267,8 @@ func TestUsageCoherence(t *testing.T) {
 	}
 	for _, code := range []string{
 		"invalid_manifest", "manifest_incomplete", "ffmpeg_not_found",
-		"ffmpeg_failed", "probe_failed", "path_not_allowed", "invalid_workspace_id",
-		"job_not_found",
+		"ffmpeg_failed", "probe_failed", "caption_failed", "path_not_allowed",
+		"invalid_workspace_id", "job_not_found",
 	} {
 		if !strings.Contains(usageMarkdown, code) {
 			t.Errorf("usage.md recovery table missing %q", code)

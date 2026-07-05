@@ -13,18 +13,33 @@ import (
 // (letter/pillar-boxed) to its exact size, muxed with the page audio. Every
 // segment is encoded to identical parameters (canvas, fps, pixel format, audio
 // codec/rate) so the segments can later be joined by stream copy.
-func segmentArgs(v config.VideoConfig, imgPath, audioPath string, durSec float64, outPath string) []string {
-	vf := fmt.Sprintf(
+//
+// capPath, when non-empty, is a canvas-sized transparent caption PNG composited
+// over the page with the core overlay filter (so no libfreetype-enabled ffmpeg
+// is required); positioning is already baked into the PNG, hence overlay=0:0.
+func segmentArgs(v config.VideoConfig, imgPath, audioPath, capPath string, durSec float64, outPath string) []string {
+	scalePad := fmt.Sprintf(
 		"scale=%d:%d:force_original_aspect_ratio=decrease,pad=%d:%d:(ow-iw)/2:(oh-ih)/2:%s,setsar=1,fps=%d",
 		v.Width, v.Height, v.Width, v.Height, v.Background, v.FPS,
 	)
-	return []string{
+	args := []string{
 		"-y",
 		"-loop", "1",
 		"-i", imgPath,
 		"-i", audioPath,
-		"-t", fmt.Sprintf("%.3f", durSec),
-		"-vf", vf,
+	}
+	if capPath == "" {
+		args = append(args, "-t", fmt.Sprintf("%.3f", durSec), "-vf", scalePad)
+	} else {
+		args = append(args,
+			"-i", capPath,
+			"-t", fmt.Sprintf("%.3f", durSec),
+			"-filter_complex", "[0:v]"+scalePad+"[bg];[bg][2:v]overlay=0:0:format=auto[v]",
+			"-map", "[v]",
+			"-map", "1:a",
+		)
+	}
+	return append(args,
 		"-r", strconv.Itoa(v.FPS),
 		"-c:v", "libx264",
 		"-preset", v.Preset,
@@ -36,7 +51,7 @@ func segmentArgs(v config.VideoConfig, imgPath, audioPath string, durSec float64
 		"-ar", strconv.Itoa(v.AudioSampleRate),
 		"-movflags", "+faststart",
 		outPath,
-	}
+	)
 }
 
 // concatArgs builds the final concat-demuxer invocation that joins the

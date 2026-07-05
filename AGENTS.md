@@ -9,8 +9,9 @@ its audio, so A/V sync is exact by construction. It is a **pure compositor** —
 slide rendering and audio synthesis happen upstream (voice-studio-mcp supplies
 the audio); this server only muxes and concatenates. Language-agnostic (it just
 stitches images + audio). Skeleton ported from `voice-studio-mcp` /
-`data-toolbox-mcp`. Dependencies: `cobra`, `BurntSushi/toml` only (ffmpeg +
-ffprobe are runtime dependencies).
+`data-toolbox-mcp`. Dependencies: `cobra`, `BurntSushi/toml`, and
+`golang.org/x/image` (caption text rendering) — ffmpeg + ffprobe are runtime
+dependencies.
 
 ## Build & test
 
@@ -40,6 +41,9 @@ Never `go build` directly — always `make build` (outputs to `dist/`).
   (faked in tests); `Build` orchestrates probe → per-page segment → concat.
 - `internal/job/` — in-memory background-render jobs (one render per job);
   progress + result/error tracking; NOT persisted (`job_not_found` on restart).
+- `internal/caption/` — renders a caption string to a transparent canvas-sized
+  PNG (bundled M PLUS 1p via `golang.org/x/image/font/opentype`); word/char wrap,
+  centered box; composited by ffmpeg `overlay`. Pure Go, hermetically tested.
 - `internal/tools/` — MCP tools (`get_usage`, `master`, `check_job`);
   `usage.md` embedded and coherence-tested.
 
@@ -76,10 +80,16 @@ Never `go build` directly — always `make build` (outputs to `dist/`).
   (manifest parse) still happens synchronously before submit; asset/ffmpeg
   errors surface via `check_job`. Jobs are in-memory only — do not add
   persistence casually; `job_not_found` → re-run master.
-- **Captions will be a soft subtitle track, not burned-in** — this machine's
-  ffmpeg has no `drawtext`/`subtitles` (no libfreetype/libass). Phase 2 captions
-  embed a `mov_text` closed-caption track instead (no font bundle, no burn-in),
-  which needs only core muxing. Do not reach for drawtext.
+- **Captions are burned in via Go-rendered overlay, NOT drawtext** — this
+  ffmpeg has no `drawtext`/`subtitles` (no libfreetype/libass), and that can't be
+  assumed on user machines. So captions are rendered in Go (`internal/caption`,
+  M PLUS 1p) to a transparent PNG and composited with the core `overlay` filter.
+  `segmentArgs` switches to a `filter_complex` (`[0:v]scale/pad[bg];[bg][2:v]overlay=0:0[v]`
+  with explicit `-map [v] -map 1:a`) only when a page has a caption. The caption
+  PNG is canvas-sized (positioning baked in → `overlay=0:0`) and server-written
+  (trusted, no VerifyRegular). A soft `mov_text` closed-caption track could be
+  added later as a complementary toggle, but burn-in is the default because it
+  survives muted social autoplay.
 
 ## ADR cheat sheet
 
@@ -90,6 +100,10 @@ Never `go build` directly — always `make build` (outputs to `dist/`).
 - **ADR-0003**: async rendering — `master async:true` submits an in-memory
   background job under the server-lifetime context; `check_job` polls
   state/progress/result; not persisted (`job_not_found` → re-run).
+- **ADR-0004**: burned-in captions via Go-rendered overlay (M PLUS 1p / OFL,
+  reusing json-to-table's pattern) + ffmpeg `overlay` — chosen over drawtext
+  (ffmpeg here lacks libfreetype) and over a soft `mov_text` track (burn-in
+  survives muted autoplay). Default off.
 
 Full texts: [`docs/en/adr/`](docs/en/adr/) / [`docs/ja/adr/`](docs/ja/adr/).
 

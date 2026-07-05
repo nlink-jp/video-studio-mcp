@@ -18,6 +18,7 @@ type Config struct {
 	Server    ServerConfig    `toml:"server"`
 	Workspace WorkspaceConfig `toml:"workspace"`
 	Video     VideoConfig     `toml:"video"`
+	Caption   CaptionConfig   `toml:"caption"`
 }
 
 // ServerConfig controls logging.
@@ -50,6 +51,21 @@ type VideoConfig struct {
 	Background      string `toml:"background"` // pad color for letter/pillar-boxing (ffmpeg color name or hex)
 }
 
+// CaptionConfig controls burned-in caption rendering (opt-in via master's
+// captions flag). Text is rendered to a transparent overlay in Go using the
+// bundled M PLUS 1p font, then composited by ffmpeg's overlay filter — no
+// dependency on ffmpeg being built with libfreetype.
+type CaptionConfig struct {
+	FontSize   float64 `toml:"font_size"`   // px at the configured canvas height
+	FontColor  string  `toml:"font_color"`  // #RRGGBB / #RRGGBBAA / white|black
+	BoxColor   string  `toml:"box_color"`   // background box color behind the text
+	BoxOpacity float64 `toml:"box_opacity"` // 0..1 applied to the box color's alpha
+	MarginV    int     `toml:"margin_v"`    // px from the bottom edge to the box
+	MarginH    int     `toml:"margin_h"`    // px kept clear on each side (wrap width)
+	BoxPadH    int     `toml:"box_pad_h"`   // horizontal padding inside the box
+	BoxPadV    int     `toml:"box_pad_v"`   // vertical padding inside the box
+}
+
 // Default returns the built-in configuration.
 func Default() *Config {
 	return &Config{
@@ -71,6 +87,16 @@ func Default() *Config {
 			AudioBitrate:    "192k",
 			AudioSampleRate: 44100,
 			Background:      "black",
+		},
+		Caption: CaptionConfig{
+			FontSize:   48,
+			FontColor:  "#FFFFFF",
+			BoxColor:   "#000000",
+			BoxOpacity: 0.5,
+			MarginV:    60,
+			MarginH:    80,
+			BoxPadH:    20,
+			BoxPadV:    12,
 		},
 	}
 }
@@ -111,6 +137,12 @@ func (c *Config) validate() error {
 	}
 	if c.Video.AudioSampleRate < 8000 {
 		return fmt.Errorf("video.audio_sample_rate must be >= 8000, got %d", c.Video.AudioSampleRate)
+	}
+	if c.Caption.FontSize <= 0 {
+		return fmt.Errorf("caption.font_size must be > 0, got %g", c.Caption.FontSize)
+	}
+	if c.Caption.BoxOpacity < 0 || c.Caption.BoxOpacity > 1 {
+		return fmt.Errorf("caption.box_opacity must be within [0, 1], got %g", c.Caption.BoxOpacity)
 	}
 	return nil
 }

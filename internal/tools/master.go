@@ -29,6 +29,7 @@ func registerMaster(srv *mcpserver.Server, d *Deps) {
     "manifest_path": {"type": "string", "description": "Page manifest JSONL path relative to the workspace root"},
     "output_name": {"type": "string", "description": "Output basename without extension (default: manifest file name)"},
     "chapters": {"type": "boolean", "description": "Emit one per-page chapter marker in the MP4 (default true); page title comes from the manifest \"title\" field, else \"Page N\""},
+    "captions": {"type": "boolean", "description": "Burn each page's manifest \"caption\" into the video, always-on (default false). Styling is controlled by the server's [caption] config."},
     "async": {"type": "boolean", "description": "Render in the background and return a job_id immediately (default false); poll check_job for progress and the result. Use for long decks that would otherwise block the call."}
   },
   "additionalProperties": false
@@ -40,6 +41,7 @@ func registerMaster(srv *mcpserver.Server, d *Deps) {
 			ManifestPath  string `json:"manifest_path"`
 			OutputName    string `json:"output_name"`
 			Chapters      *bool  `json:"chapters"`
+			Captions      *bool  `json:"captions"`
 			Async         *bool  `json:"async"`
 		}{}
 		if err := unmarshalStrict(args, &in); err != nil {
@@ -49,6 +51,7 @@ func registerMaster(srv *mcpserver.Server, d *Deps) {
 		if in.Chapters != nil {
 			chapters = *in.Chapters
 		}
+		captions := in.Captions != nil && *in.Captions
 		async := in.Async != nil && *in.Async
 		if in.WorkspaceID == "" {
 			return nil, toolerr.New(toolerr.CodeMissingArgument, "workspace_id is required")
@@ -78,7 +81,7 @@ func registerMaster(srv *mcpserver.Server, d *Deps) {
 		}
 
 		stem := strings.TrimSuffix(filepath.Base(in.ManifestPath), filepath.Ext(in.ManifestPath))
-		m := &master.Master{Runner: d.Runner, Cfg: d.Cfg.Video}
+		m := &master.Master{Runner: d.Runner, Cfg: d.Cfg.Video, Caption: d.Cfg.Caption}
 
 		if async {
 			total := len(pages)
@@ -86,6 +89,7 @@ func registerMaster(srv *mcpserver.Server, d *Deps) {
 				return m.Build(ctx, ws, stem, pages, master.Options{
 					OutputName: in.OutputName,
 					Chapters:   chapters,
+					Captions:   captions,
 					OnProgress: func(phase string, done, total int) {
 						report(job.Progress{Phase: phase, Done: done, Total: total})
 					},
@@ -94,6 +98,6 @@ func registerMaster(srv *mcpserver.Server, d *Deps) {
 			return map[string]any{"job_id": jobID, "state": job.StateRunning, "pages": total}, nil
 		}
 
-		return m.Build(ctx, ws, stem, pages, master.Options{OutputName: in.OutputName, Chapters: chapters})
+		return m.Build(ctx, ws, stem, pages, master.Options{OutputName: in.OutputName, Chapters: chapters, Captions: captions})
 	})
 }
