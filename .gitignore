@@ -1,0 +1,16 @@
+# Build artifacts
+dist/
+
+# Claude Code local settings
+.claude/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Editor / tool leftovers
+*.swp
+*.swo
+*~

@@ -1,0 +1,24 @@
+# video-studio-mcp configuration
+#
+# Copy to ~/.config/video-studio-mcp/config.toml and adjust.
+# Every key is optional; the values below are the built-in defaults.
+
+[server]
+log_level = "info"        # debug | info | warn | error
+log_file = ""             # empty = stderr only; logs NEVER go to stdout (MCP transport)
+
+[workspace]
+workspace_dir = "~/.video-studio"   # default root; one sub-directory per deck
+
+[video]
+ffmpeg_path = "ffmpeg"    # absolute path or a name found in PATH
+ffprobe_path = "ffprobe"  # ships with ffmpeg; used to measure each page's audio length
+width = 1920              # canvas width  (even number, for yuv420p)
+height = 1080             # canvas height (even number, for yuv420p)
+fps = 30                 # output frame rate
+crf = 20                 # x264 quality: 0=lossless .. 51=worst; ~18-23 is visually clean
+preset = "medium"         # x264 speed/size tradeoff (ultrafast..veryslow)
+pix_fmt = "yuv420p"       # broad playback compatibility (QuickTime, browsers, social)
+audio_bitrate = "192k"    # AAC bitrate
+audio_sample_rate = 44100 # forced on every segment so concat can stream-copy
+background = "black"      # pad color for letter/pillar-boxing (ffmpeg color name or hex, e.g. "0x101010")
