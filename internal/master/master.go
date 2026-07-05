@@ -28,6 +28,9 @@ type Master struct {
 type Options struct {
 	OutputName string // basename without extension; default: manifest file stem
 	Chapters   bool   // emit one per-page chapter marker in the MP4
+	// OnProgress, if set, is called as the render advances (phase, pages done,
+	// pages total). Used by the async job path; nil is a no-op.
+	OnProgress func(phase string, done, total int)
 }
 
 // Result is the master tool's response payload.
@@ -61,6 +64,12 @@ func (m *Master) Build(ctx context.Context, ws *workspace.Workspace, manifestSte
 	if _, err := exec.LookPath(m.Cfg.FFprobePath); err != nil {
 		return Result{}, toolerr.Newf(toolerr.CodeFFmpegNotFound,
 			"ffprobe not found at %q — it ships with ffmpeg; install it or set video.ffprobe_path", m.Cfg.FFprobePath)
+	}
+
+	report := func(phase string, done, total int) {
+		if opts.OnProgress != nil {
+			opts.OnProgress(phase, done, total)
+		}
 	}
 
 	// 1. Resolve + verify every referenced image and audio as a real regular
@@ -127,6 +136,7 @@ func (m *Master) Build(ctx context.Context, ws *workspace.Workspace, manifestSte
 
 	// 4. Render one segment per page. ffmpeg cannot inherit os.Root, so the
 	// image/audio inputs verified in step 1 are handed over as absolute paths.
+	report("rendering", 0, len(items))
 	segRels := make([]string, 0, len(items))
 	for i := range items {
 		segRel := filepath.Join(tmpRel, fmt.Sprintf("seg_%03d.mp4", i+1))
@@ -135,6 +145,7 @@ func (m *Master) Build(ctx context.Context, ws *workspace.Workspace, manifestSte
 			return Result{}, err
 		}
 		segRels = append(segRels, segRel)
+		report("rendering", i+1, len(items))
 	}
 
 	// 5. Concat list (each segment re-verified as a regular file pre-spawn).
@@ -169,6 +180,7 @@ func (m *Master) Build(ctx context.Context, ws *workspace.Workspace, manifestSte
 		name = manifestStem
 	}
 	outRel := filepath.Join(workspace.DirOutput, name+".mp4")
+	report("finalizing", len(items), len(items))
 	if err := m.runFFmpeg(ctx, concatArgs(ws.Path(listRel), metadataPath, ws.Path(outRel))); err != nil {
 		return Result{}, err
 	}

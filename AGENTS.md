@@ -38,8 +38,10 @@ Never `go build` directly — always `make build` (outputs to `dist/`).
 - `internal/master/` — the render pipeline: pure ffmpeg/ffprobe arg builders
   (`segmentArgs`, `concatArgs`, `probeArgs`, `concatList`) + `Runner` interface
   (faked in tests); `Build` orchestrates probe → per-page segment → concat.
-- `internal/tools/` — MCP tools (`get_usage`, `master`); `usage.md` embedded and
-  coherence-tested.
+- `internal/job/` — in-memory background-render jobs (one render per job);
+  progress + result/error tracking; NOT persisted (`job_not_found` on restart).
+- `internal/tools/` — MCP tools (`get_usage`, `master`, `check_job`);
+  `usage.md` embedded and coherence-tested.
 
 ## Gotchas
 
@@ -68,6 +70,16 @@ Never `go build` directly — always `make build` (outputs to `dist/`).
   `-map 0 -map_metadata 1`; boundaries come from the same probed durations used
   for `-t`, so no extra probing. Titles use the manifest `title` (→ `Page N`).
   Default on; `chapters: false` opts out.
+- **Async jobs run under JobCtx, not the request ctx** — `master async:true`
+  submits the render under `Deps.JobCtx` (the server-lifetime signal context),
+  so it outlives the tool call but is cancelled on shutdown. Validation
+  (manifest parse) still happens synchronously before submit; asset/ffmpeg
+  errors surface via `check_job`. Jobs are in-memory only — do not add
+  persistence casually; `job_not_found` → re-run master.
+- **Captions will be a soft subtitle track, not burned-in** — this machine's
+  ffmpeg has no `drawtext`/`subtitles` (no libfreetype/libass). Phase 2 captions
+  embed a `mov_text` closed-caption track instead (no font bundle, no burn-in),
+  which needs only core muxing. Do not reach for drawtext.
 
 ## ADR cheat sheet
 
@@ -75,6 +87,9 @@ Never `go build` directly — always `make build` (outputs to `dist/`).
   looped to probed audio length, scaled + padded) → concat-demuxer stream copy.
 - **ADR-0002**: per-page chapter markers via ffmetadata on the concat step;
   default on; title = manifest `title` else `Page N`.
+- **ADR-0003**: async rendering — `master async:true` submits an in-memory
+  background job under the server-lifetime context; `check_job` polls
+  state/progress/result; not persisted (`job_not_found` → re-run).
 
 Full texts: [`docs/en/adr/`](docs/en/adr/) / [`docs/ja/adr/`](docs/ja/adr/).
 

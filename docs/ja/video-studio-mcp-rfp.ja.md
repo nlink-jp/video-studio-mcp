@@ -78,9 +78,10 @@
 
 ### Phase 2: Features
 
-- 字幕焼き込み（`caption` → ffmpeg、既定 off の opt-in）＋ **CJK フォント同梱（Noto Sans JP / OFL）・`fontfile` 上書き・未解決時エラー**
+- **非同期レンダリング `check_job`（実装済 2026-07-06, ADR-0003）** — `master async:true` でジョブ投入 →`check_job` で進捗/結果取得。
+- 字幕（`caption`）— **方式転換予定: 焼き込み＋CJKフォント同梱ではなく、クローズドキャプション（`mov_text` ソフト字幕トラック）を採用**。理由: 実環境の ffmpeg が `drawtext`/`subtitles`（libfreetype/libass）非対応で、ユーザー環境でも前提にできないと判明。ソフト字幕トラックなら core muxing のみで動作し、**CJK フォント同梱・OFL 依存が不要化**。詳細は実装時に ADR-0004 で確定。
 - フェード等トランジション（xfade）、解像度／アスペクト上書き
-- 中間セグメント保持／破棄オプション、長尺向け `check_job`（非同期）
+- 中間セグメント保持／破棄オプション
 - → 各機能を独立レビュー可
 
 ### Phase 3: Release

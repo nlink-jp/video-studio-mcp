@@ -19,6 +19,11 @@ All notable changes to this project are documented here. The format follows
 - Per-page **chapter markers** in the MP4 (default on; `chapters: false` to
   disable). Chapter title comes from the manifest `title` field, else `Page N`;
   boundaries follow the per-page durations (ffmetadata via the concat step).
+- **Async rendering** (Phase 2): `master` takes `async: true` to render in the
+  background and return a `job_id`; the new `check_job` tool reports state and
+  page progress and, when done, the full result. Jobs are in-memory
+  (`internal/job`), not persisted; `job_not_found` guides recovery (re-run
+  master). ADR-0003.
 - `get_usage` tool — embedded operating manual (`internal/tools/usage.md`),
   coherence-tested against the real tool/error/schema surface.
 - Page manifest JSONL parser (`internal/manifest`) with strict decode and

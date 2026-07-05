@@ -68,5 +68,6 @@ const (
 	CodeFFmpegFailed       = "ffmpeg_failed"
 	CodeFFmpegNotFound     = "ffmpeg_not_found"
 	CodeJobNotFound        = "job_not_found"
+	CodeRenderFailed       = "render_failed"
 	CodeWorkspaceFailed    = "workspace_failed"
 )

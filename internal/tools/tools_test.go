@@ -9,8 +9,10 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/nlink-jp/video-studio-mcp/internal/config"
+	"github.com/nlink-jp/video-studio-mcp/internal/job"
 	"github.com/nlink-jp/video-studio-mcp/internal/master"
 	"github.com/nlink-jp/video-studio-mcp/internal/mcpserver"
 	"github.com/nlink-jp/video-studio-mcp/internal/toolerr"
@@ -186,6 +188,61 @@ func TestMasterMissingArgs(t *testing.T) {
 	}
 }
 
+func TestMasterAsync(t *testing.T) {
+	h := newHarness(t)
+	root := seedDeck(t, "deck")
+
+	out, err := h.call("master", map[string]any{
+		"workspace_id":   "deck",
+		"workspace_root": root,
+		"manifest_path":  "deck.jsonl",
+		"async":          true,
+	})
+	if err != nil {
+		t.Fatalf("master async: %v", err)
+	}
+	sub := out.(map[string]any)
+	if sub["state"] != job.StateRunning || sub["pages"] != 2 {
+		t.Fatalf("submit response: %+v", sub)
+	}
+	jobID, ok := sub["job_id"].(string)
+	if !ok || jobID == "" {
+		t.Fatalf("no job_id: %+v", sub)
+	}
+
+	// Poll check_job until the render finishes (fakeRunner is instant).
+	var st job.Status
+	for i := 0; i < 500; i++ {
+		o, err := h.call("check_job", map[string]any{"job_id": jobID})
+		if err != nil {
+			t.Fatalf("check_job: %v", err)
+		}
+		st = o.(job.Status)
+		if st.State != job.StateRunning {
+			break
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+	if st.State != job.StateDone {
+		t.Fatalf("job did not complete: %+v", st)
+	}
+	res := st.Result.(master.Result)
+	if res.Pages != 2 || res.Chapters != 2 {
+		t.Errorf("result: %+v", res)
+	}
+	if _, err := os.Stat(res.MasterPath); err != nil {
+		t.Errorf("async output not written: %v", err)
+	}
+}
+
+func TestCheckJobNotFound(t *testing.T) {
+	h := newHarness(t)
+	_, err := h.call("check_job", map[string]any{"job_id": "job_deadbeef"})
+	if !errors.Is(err, toolerr.New(toolerr.CodeJobNotFound, "")) {
+		t.Fatalf("want job_not_found, got %v", err)
+	}
+}
+
 func TestGetUsage(t *testing.T) {
 	h := newHarness(t)
 	out, err := h.call("get_usage", map[string]any{})
@@ -203,7 +260,7 @@ func TestGetUsage(t *testing.T) {
 
 // TestUsageCoherence pins usage.md against the real server surface.
 func TestUsageCoherence(t *testing.T) {
-	for _, tool := range []string{"master"} {
+	for _, tool := range []string{"master", "check_job"} {
 		if !strings.Contains(usageMarkdown, "`"+tool+"`") {
 			t.Errorf("usage.md does not reference tool %q", tool)
 		}
@@ -211,6 +268,7 @@ func TestUsageCoherence(t *testing.T) {
 	for _, code := range []string{
 		"invalid_manifest", "manifest_incomplete", "ffmpeg_not_found",
 		"ffmpeg_failed", "probe_failed", "path_not_allowed", "invalid_workspace_id",
+		"job_not_found",
 	} {
 		if !strings.Contains(usageMarkdown, code) {
 			t.Errorf("usage.md recovery table missing %q", code)

@@ -7,10 +7,12 @@ package tools
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"log/slog"
 
 	"github.com/nlink-jp/video-studio-mcp/internal/config"
+	"github.com/nlink-jp/video-studio-mcp/internal/job"
 	"github.com/nlink-jp/video-studio-mcp/internal/master"
 	"github.com/nlink-jp/video-studio-mcp/internal/mcpserver"
 	"github.com/nlink-jp/video-studio-mcp/internal/toolerr"
@@ -23,6 +25,12 @@ type Deps struct {
 	WS  *workspace.Manager
 	// Runner executes ffmpeg/ffprobe for the master tool (fake in tests).
 	Runner master.Runner
+	// Jobs tracks background (async) renders.
+	Jobs *job.Manager
+	// JobCtx is the server-lifetime context async renders run under; tying them
+	// to the per-request ctx would abort the render the moment the tool call
+	// returns.
+	JobCtx context.Context
 	Logger *slog.Logger
 }
 
@@ -34,8 +42,15 @@ func Register(srv *mcpserver.Server, d *Deps) {
 	if d.Runner == nil {
 		d.Runner = master.ExecRunner{}
 	}
+	if d.Jobs == nil {
+		d.Jobs = job.NewManager()
+	}
+	if d.JobCtx == nil {
+		d.JobCtx = context.Background()
+	}
 	registerGetUsage(srv, d)
 	registerMaster(srv, d)
+	registerCheckJob(srv, d)
 }
 
 // unmarshalStrict decodes tool arguments, rejecting unknown fields so agent

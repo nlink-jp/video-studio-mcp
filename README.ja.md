@@ -84,7 +84,16 @@ output/            出力mp4 + tmp        （サーバーが書く）
 | ツール | 目的 |
 |------|---------|
 | `get_usage` | 操作マニュアル（ワークスペースモデル・マニフェストスキーマ・リカバリ表）を返す。レンダリング前に一度呼ぶ。 |
-| `master` | ページマニフェストから MP4 を1本生成。引数: `workspace_id`, `manifest_path`, 任意 `workspace_root`, `output_name`, `chapters`（既定 true）。 |
+| `master` | ページマニフェストから MP4 を1本生成。引数: `workspace_id`, `manifest_path`, 任意 `workspace_root`, `output_name`, `chapters`（既定 true）, `async`（既定 false）。 |
+| `check_job` | 非同期レンダの進捗を取得: `state`・ページ進捗、`done` 時は `master` の同期結果と同じペイロード。 |
+
+### 非同期レンダリング
+
+長尺デッキでは `master` に `async: true` を渡す。即 `job_id` を返して
+バックグラウンドで描画する。その `job_id` で `check_job` をポーリングして
+`state`（`running`/`done`/`failed`）とページ進捗を取得し、`done` になれば
+ステータスに完全な結果が入る。ジョブはインメモリで再起動を跨がない（未知の
+`job_id` は `job_not_found` → `master` を再実行するだけ）。
 
 ## ページマニフェスト（JSONL・1行1ページ）
 

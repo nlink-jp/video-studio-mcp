@@ -78,9 +78,10 @@ No `synthesize` equivalent (audio is voice-studio-mcp's responsibility). Composi
 
 ### Phase 2: Features
 
-- Caption burn-in (`caption` → ffmpeg, opt-in with default off) + **bundled CJK font (Noto Sans JP / OFL), `fontfile` override, error when unresolved**
+- **Async rendering `check_job` (implemented 2026-07-06, ADR-0003)** — `master async:true` submits a job; `check_job` polls progress/result.
+- Captions (`caption`) — **approach changed: instead of burn-in + bundled CJK font, use a closed-caption (`mov_text` soft subtitle track)**. Reason: the real ffmpeg here has no `drawtext`/`subtitles` (libfreetype/libass), and that cannot be assumed on user machines either. A soft subtitle track needs only core muxing, which **removes the CJK-font bundle and the OFL dependency**. To be finalized in ADR-0004 when implemented.
 - Fade and other transitions (xfade), resolution / aspect overrides
-- Keep/discard intermediate segments, `check_job` (async) for long renders
+- Keep/discard intermediate segments
 - → each feature independently reviewable
 
 ### Phase 3: Release

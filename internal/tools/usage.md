@@ -43,6 +43,10 @@ output/            rendered mp4 + tmp    (server-written)
 4. `master` — muxes each page (image looped for its audio's duration) and
    concatenates the pages into `output/<name>.mp4`. Returns the path, page
    count, and total duration.
+   - For a long deck, pass `async: true`: `master` returns a `job_id`
+     immediately and renders in the background. Poll `check_job` with that
+     `job_id` for progress (`state`, pages done/total) and, once `state` is
+     `done`, the same result payload `master` returns synchronously.
 
 ## Page manifest JSONL (one page per line)
 
@@ -82,3 +86,4 @@ players that support chapters. Pass `chapters: false` to `master` to disable.
 | probe_failed | the page audio is unreadable by ffprobe; re-supply that audio file |
 | path_not_allowed | use workspace-relative asset paths / a valid absolute workspace_root; symlinks out of the workspace are rejected |
 | invalid_workspace_id | match [a-zA-Z0-9_-]{1,64} |
+| job_not_found | the server restarted (async jobs are in-memory); re-run master (it re-renders from the same workspace) |

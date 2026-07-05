@@ -87,7 +87,16 @@ rejected with `path_not_allowed`).
 | Tool | Purpose |
 |------|---------|
 | `get_usage` | Return the operating manual (workspace model, manifest schema, recovery table). Call once before rendering. |
-| `master` | Build one MP4 from a page manifest. Args: `workspace_id`, `manifest_path`, optional `workspace_root`, `output_name`, `chapters` (default true). |
+| `master` | Build one MP4 from a page manifest. Args: `workspace_id`, `manifest_path`, optional `workspace_root`, `output_name`, `chapters` (default true), `async` (default false). |
+| `check_job` | Poll an async render: `state`, page progress, and — when `done` — the same result `master` returns synchronously. |
+
+### Async rendering
+
+For a long deck, pass `async: true` to `master`: it returns a `job_id`
+immediately and renders in the background. Poll `check_job` with that `job_id`
+for `state` (`running`/`done`/`failed`) and page progress; when `done`, the
+status carries the full result. Jobs are in-memory and do not survive a server
+restart (an unknown `job_id` returns `job_not_found` — just re-run `master`).
 
 ## Page manifest (JSONL, one page per line)
 

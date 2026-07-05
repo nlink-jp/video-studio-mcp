@@ -41,6 +41,9 @@ func runServe(cmd *cobra.Command, args []string) error {
 		defer logFile.Close()
 	}
 
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer cancel()
+
 	tr := transport.NewStdioTransport(os.Stdin, os.Stdout)
 	srv := mcpserver.New("video-studio-mcp", Version, tr, logger)
 	srv.SetInstructions(tools.Instructions)
@@ -48,11 +51,9 @@ func runServe(cmd *cobra.Command, args []string) error {
 		Cfg:    cfg,
 		WS:     workspace.NewManager(cfg.Workspace.Dir),
 		Runner: master.ExecRunner{},
+		JobCtx: ctx, // async renders outlive the tool call but stop on shutdown
 		Logger: logger,
 	})
-
-	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer cancel()
 
 	logger.Info("serving MCP over stdio", "version", Version, "workspace_dir", cfg.Workspace.Dir)
 	if err := srv.Serve(ctx); err != nil {
