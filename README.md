@@ -177,4 +177,5 @@ We are grateful to the M+ FONTS Project for this excellent font. See
 
 ## License
 
-See the repository license.
+MIT — see [LICENSE](LICENSE). The bundled M PLUS 1p font is under the SIL Open
+Font License 1.1 (see [Fonts](#fonts) and [FONTS_LICENSE](FONTS_LICENSE)).

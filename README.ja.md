@@ -167,4 +167,5 @@ SNS 配信に有用。画像は常にレター/ピラーボックスで収める
 
 ## ライセンス
 
-リポジトリのライセンス参照。
+MIT — [LICENSE](LICENSE) 参照。同梱の M PLUS 1p フォントは SIL Open Font
+License 1.1（[フォント](#フォント)・[FONTS_LICENSE](FONTS_LICENSE) 参照）。

@@ -57,7 +57,9 @@ package: build-all
 		rm -rf $(STAGE) && mkdir -p $(STAGE) ; \
 		cp $(BIN) $(STAGE)/$(BINARY)$(EXT) ; \
 		cp README.md $(STAGE)/README.md ; \
-		zip -j $(ZIP) $(STAGE)/$(BINARY)$(EXT) $(STAGE)/README.md ; \
+		cp LICENSE $(STAGE)/LICENSE ; \
+		cp FONTS_LICENSE $(STAGE)/FONTS_LICENSE ; \
+		zip -j $(ZIP) $(STAGE)/$(BINARY)$(EXT) $(STAGE)/README.md $(STAGE)/LICENSE $(STAGE)/FONTS_LICENSE ; \
 		rm -rf $(STAGE) ;)
 	@scripts/notarize-darwin.sh $(BIN_DIR)/$(BINARY)-$(VERSION)-darwin-arm64.zip "$(NOTARY_PROFILE)"
 	@scripts/notarize-darwin.sh $(BIN_DIR)/$(BINARY)-$(VERSION)-darwin-amd64.zip "$(NOTARY_PROFILE)"

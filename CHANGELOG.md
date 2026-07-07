@@ -4,6 +4,19 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- MIT `LICENSE` file (the repository shipped without one). The `README` license
+  sections now point to it.
+
+### Changed
+
+- Release zips bundle `LICENSE` and `FONTS_LICENSE` alongside the binary and
+  README, so the embedded M PLUS 1p font's SIL OFL license travels with the
+  distributed binary.
+
 ## [0.2.0] - 2026-07-06
 
 ### Added
