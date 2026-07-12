@@ -39,7 +39,7 @@ side (`doctor`, `version`) is for local diagnostics.
 ```sh
 make build      # → dist/video-studio-mcp (auto-codesign on darwin)
 make test       # go test ./...  (hermetic: no ffmpeg required)
-make package    # cross-compile 5 platforms + zip + notarize darwin
+make package    # cross-compile 4 platforms (darwin arm64 only) + zip/tar.gz + notarize darwin
 ```
 
 Verify the environment:

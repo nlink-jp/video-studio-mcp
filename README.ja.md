@@ -37,7 +37,7 @@ voice-studio-mcp  ─▶  ページ音声 ─┐
 ```sh
 make build      # → dist/video-studio-mcp（darwin は自動 codesign）
 make test       # go test ./...（ffmpeg 不要のハーメティックテスト）
-make package    # 5プラットフォームをクロスビルド + zip + darwin notarize
+make package    # 4プラットフォームをクロスビルド（darwin は arm64 のみ）+ zip/tar.gz + darwin notarize
 ```
 
 環境チェック:

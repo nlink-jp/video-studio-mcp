@@ -18,7 +18,7 @@ dependencies.
 ```sh
 make build      # → dist/video-studio-mcp (auto-codesign on darwin)
 make test       # go test ./... (hermetic: no ffmpeg needed — faked Runner)
-make package    # build-all (5 platforms) + zip + notarize darwin
+make package    # build-all (4 platforms; darwin arm64 only) + zip/tar.gz + notarize darwin
 ```
 
 Never `go build` directly — always `make build` (outputs to `dist/`).

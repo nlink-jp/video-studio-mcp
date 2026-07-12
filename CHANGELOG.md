@@ -4,6 +4,28 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] - 2026-07-12
+
+### Removed
+
+- **darwin/amd64 (Intel) pre-built binary.** macOS releases now ship
+  **arm64 only**, per the org-wide policy (darwin is Apple-Silicon only; no
+  universal binaries). Intel Mac users can build from source.
+
+### Changed
+
+- **Linux release archives are now `.tar.gz`** (darwin/windows remain `.zip`),
+  per `nlink-jp/.github` CONVENTIONS.md §Release Archive Standard. Archives
+  still bundle `LICENSE` + `README.md` + `FONTS_LICENSE` alongside the binary.
+- **darwin code-signature identifier** is now the canonical `video-studio-mcp`
+  (was `video-studio-mcp-darwin-arm64`), set via `codesign -i` so it stays
+  stable after the archived binary is renamed to its canonical name.
+- **Dropped the `-s -w` linker strip flags**, aligning `LDFLAGS` with the
+  org-standard form; also avoids a false-positive antivirus quarantine of
+  the stripped Windows binary during cross-build.
+
+No change to the binary's behaviour — a packaging / build-config release.
+
 ## [0.2.1] - 2026-07-06
 
 ### Added
