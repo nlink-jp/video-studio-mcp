@@ -339,6 +339,13 @@ func TestUsageCoherence(t *testing.T) {
 			t.Errorf("usage.md manifest schema missing %s", field)
 		}
 	}
+	// Render options an agent can pass; the manual is the only place a client
+	// without the workflow skill can learn they exist.
+	for _, opt := range []string{"chapters", "captions", "soft_captions", "fade_seconds", "keep_intermediates", "async"} {
+		if !strings.Contains(usageMarkdown, opt) {
+			t.Errorf("usage.md does not document the %q option", opt)
+		}
+	}
 	if !strings.Contains(Instructions, "get_usage") {
 		t.Errorf("initialize instructions must point at get_usage")
 	}

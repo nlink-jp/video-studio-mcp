@@ -60,8 +60,8 @@ Fields: `image` (required; workspace-relative still image), `audio`
 on-screen time), `title` (optional; the page's **chapter-marker** name —
 defaults to `Page N`), `caption` (optional; shown via `master`'s `captions`
 (burned-in) and/or `soft_captions` (toggleable track) — ignored when both are
-off), `transition` (optional; `cut` default — `fade` is accepted but **rendered
-as a hard cut**).
+off), `transition` (optional; how this page joins the **next** one — `cut`
+default, or `fade`; ignored on the last page).
 
 Blank lines and lines starting with `#` are ignored.
 
@@ -87,6 +87,17 @@ The manifest `caption` can be shown two independent ways (both default off):
 
 Enable both for burned-in pixels plus a selectable track. The result reports
 `captions_burned` and `soft_caption_cues` (pages that contributed to each).
+
+**Fade transitions**: a page whose `transition` is `"fade"` fades out at its end
+and the next page fades in at its start, dipping to the canvas background
+colour. The fade happens **inside each page's own duration**, so total duration,
+chapter markers, and caption timing are unaffected — but the narration keeps
+playing while the image dims, so keep a little trailing silence in the audio if
+that matters. `fade_seconds` (default 0.5, or `[video] fade_seconds`) sets the
+length; it is clamped so at least half of every page stays at full brightness,
+and `0` turns every boundary back into a cut. The last page's `transition` is
+ignored — there is no next page. The result reports `fades_applied` (boundaries
+rendered as a fade). Audio is never faded.
 
 **Canvas override**: pass `width`/`height`/`fps` to override the output size for
 one render (dimensions must be even and ≥16). Produce the same deck as `16:9`

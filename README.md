@@ -20,8 +20,9 @@ slides ─▶ per-page images ────────┘
 
 > **Status:** Released. Tools: `get_usage`, `master`, `check_job`. Captions ship
 > in both forms — burned-in (`captions`) and a closed-caption track
-> (`soft_captions`). Non-cut transitions are **not** implemented: `transition:
-> fade` is accepted by the manifest but rendered as a hard cut. See
+> (`soft_captions`) — and `transition: "fade"` dips between pages. A true
+> cross-page dissolve is out of scope (it would break the exact-duration
+> guarantee; see [ADR-0007](docs/en/adr/0007-fade-transitions.md)). See
 > [CHANGELOG.md](CHANGELOG.md) for the current version.
 
 ## Why an MCP server (not a CLI)
@@ -90,7 +91,7 @@ rejected with `path_not_allowed`).
 | Tool | Purpose |
 |------|---------|
 | `get_usage` | Return the operating manual (workspace model, manifest schema, recovery table). Call once before rendering. |
-| `master` | Build one MP4 from a page manifest. Args: `workspace_id`, `manifest_path`, optional `workspace_root`, `output_name`, `chapters` (default true), `captions` / `soft_captions` (default false), `width`/`height`/`fps` (canvas override), `keep_intermediates` (default false), `async` (default false). |
+| `master` | Build one MP4 from a page manifest. Args: `workspace_id`, `manifest_path`, optional `workspace_root`, `output_name`, `chapters` (default true), `captions` / `soft_captions` (default false), `width`/`height`/`fps` (canvas override), `fade_seconds` (default 0.5), `keep_intermediates` (default false), `async` (default false). |
 | `check_job` | Poll an async render: `state`, page progress, and — when `done` — the same result `master` returns synchronously. |
 
 ### Output size / aspect
@@ -117,6 +118,26 @@ The manifest `caption` can be shown two independent ways (both default off):
 
 Enable both for burned-in pixels plus a selectable track.
 
+### Transitions
+
+A page whose `transition` is `"fade"` fades out at its end, and the next page
+fades in at its start, dipping to the canvas `background` colour. Both fades
+happen **inside each page's own duration** — pages never overlap — so total
+duration stays the sum of the audio durations and chapter/caption timing is
+untouched. The flip side: the narration keeps playing while the image dims, so
+leave a little trailing silence in the audio when that matters.
+
+`fade_seconds` (per call, or `[video] fade_seconds`; default `0.5`) sets the
+length. It is clamped so at least half of every page stays at full brightness —
+a 0.5 s fade on a 0.8 s page becomes 0.2 s on each side — and a fade shorter
+than one frame is dropped. `fade_seconds: 0` renders every boundary as a cut.
+The last page's `transition` is ignored: there is no next page. `master` reports
+`fades_applied`.
+
+Audio is never faded, and there is no cross-page dissolve — an `xfade` would
+overlap the pages and break the exact-duration guarantee
+([ADR-0007](docs/en/adr/0007-fade-transitions.md)).
+
 ### Async rendering
 
 For a long deck, pass `async: true` to `master`: it returns a `job_id`
@@ -138,8 +159,8 @@ restart (an unknown `job_id` returns `job_not_found` — just re-run `master`).
 - `title` (optional) — the page's **chapter-marker** name (default `Page N`).
 - `caption` (optional) — subtitle text **burned into the video** when `master`
   is called with `captions: true` (ignored otherwise).
-- `transition` (optional) — `cut` (default). `fade` is accepted but rendered as
-  a hard cut.
+- `transition` (optional) — how this page joins the **next** one: `cut`
+  (default) or `fade`. Ignored on the last page (no next page to join).
 
 Blank lines and `#` comment lines are ignored.
 

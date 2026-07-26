@@ -36,7 +36,10 @@ make package    # build-all + zip + notarize darwin
 - All segments share codec params so concat can stream-copy.
 - Agent-prepared workspaces; all I/O via `os.Root`; ffmpeg inputs re-verified
   pre-spawn.
-- Captions + non-cut transitions are Phase 2 (captions need a bundled CJK font).
+- Captions ship in both forms (burned-in overlay + `mov_text` soft track).
+- `transition: "fade"` is a **within-page dip**, never a cross-page `xfade` —
+  overlapping pages would break the Σ-audio duration and the copy-concat
+  (ADR-0007).
 
 ## Design references
 

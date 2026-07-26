@@ -18,8 +18,9 @@ voice-studio-mcp  ─▶  ページ音声 ─┐
 
 > **状態:** リリース済み。ツール: `get_usage`, `master`, `check_job`。字幕は
 > 焼き込み（`captions`）とクローズドキャプショントラック（`soft_captions`）の
-> 両形式とも実装済み。非カットのトランジションは**未実装** — `transition:
-> fade` はマニフェスト上受理するがハードカットで描画する。現行バージョンは
+> 両形式とも実装済みで、`transition: "fade"` によるページ間ディップも実装済み。
+> 本当のページ間ディゾルブはスコープ外（尺厳密性の保証を壊すため。
+> [ADR-0007](docs/ja/adr/0007-fade-transitions.ja.md) 参照）。現行バージョンは
 > [CHANGELOG.md](CHANGELOG.md) を参照。
 
 ## なぜ CLI でなく MCP か
@@ -87,7 +88,7 @@ output/            出力mp4 + tmp        （サーバーが書く）
 | ツール | 目的 |
 |------|---------|
 | `get_usage` | 操作マニュアル（ワークスペースモデル・マニフェストスキーマ・リカバリ表）を返す。レンダリング前に一度呼ぶ。 |
-| `master` | ページマニフェストから MP4 を1本生成。引数: `workspace_id`, `manifest_path`, 任意 `workspace_root`, `output_name`, `chapters`（既定 true）, `captions` / `soft_captions`（既定 false）, `width`/`height`/`fps`（キャンバス上書き）, `keep_intermediates`（既定 false）, `async`（既定 false）。 |
+| `master` | ページマニフェストから MP4 を1本生成。引数: `workspace_id`, `manifest_path`, 任意 `workspace_root`, `output_name`, `chapters`（既定 true）, `captions` / `soft_captions`（既定 false）, `width`/`height`/`fps`（キャンバス上書き）, `fade_seconds`（既定 0.5）, `keep_intermediates`（既定 false）, `async`（既定 false）。 |
 | `check_job` | 非同期レンダの進捗を取得: `state`・ページ進捗、`done` 時は `master` の同期結果と同じペイロード。 |
 
 ### 出力サイズ / アスペクト
@@ -112,6 +113,25 @@ SNS 配信に有用。画像は常にレター/ピラーボックスで収める
 
 両方有効化すれば、焼き込みピクセル＋選択可能トラックの両立も可能。
 
+### トランジション
+
+`transition` が `"fade"` のページは末尾でフェードアウトし、次のページは先頭で
+フェードインする（ディップ先はキャンバスの `background` 色）。どちらのフェードも
+**各ページ自身の尺の内側**で起きる —— ページは重ならない —— ので、総尺は音声尺の
+総和のままで、チャプター/字幕のタイミングにも影響しない。裏返しとして、画像が
+暗くなる間もナレーションは鳴り続けるので、気になる場合は音声末尾に少し無音を
+持たせるとよい。
+
+長さは `fade_seconds`（呼び出し単位、または `[video] fade_seconds`。既定 `0.5`）。
+**どのページも必ず半分以上は全輝度**になるようクランプされ（0.8 秒ページでの
+0.5 秒フェードは両側 0.2 秒になる）、1フレーム未満になるフェードは落とす。
+`fade_seconds: 0` で全境界がカットに戻る。最終ページの `transition` は無視される
+（次のページが無い）。`master` は `fades_applied` を報告する。
+
+音声はフェードしない。またページ間ディゾルブは無い —— `xfade` はページを
+オーバーラップさせ、尺厳密性の保証を壊すため
+（[ADR-0007](docs/ja/adr/0007-fade-transitions.ja.md)）。
+
 ### 非同期レンダリング
 
 長尺デッキでは `master` に `async: true` を渡す。即 `job_id` を返して
@@ -131,7 +151,8 @@ SNS 配信に有用。画像は常にレター/ピラーボックスで収める
 - `audio`（必須）— ワークスペース相対のナレーション音声。その長さがページの表示時間。
 - `title`（任意）— そのページの**チャプターマーカー**名（既定 `Page N`）。
 - `caption`（任意）— `master` を `captions: true` で呼んだとき動画に**焼き込む**字幕テキスト（off 時は無視）。
-- `transition`（任意）— `cut`（既定）。`fade` は受理するがハードカット。
+- `transition`（任意）— **次のページ**への繋ぎ方: `cut`（既定）または `fade`。
+  最終ページでは無視（繋ぐ次ページが無い）。
 
 空行と `#` 始まりのコメント行は無視。
 

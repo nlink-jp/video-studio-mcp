@@ -50,3 +50,9 @@ distort.
   filter pass; caption burn-in additionally requires bundling a CJK font
   (Noto Sans JP / OFL). Phase 1 renders every page as a hard cut with no
   caption.
+
+  *Superseded in part:* captions shipped via ADR-0004 / ADR-0006, and fade
+  transitions via ADR-0007 — which found that a **cross-page** filter pass is
+  exactly what must not happen (it would break this ADR's stream-copy concat and
+  the exact-duration guarantee), and implemented the fade inside each page's own
+  segment instead.

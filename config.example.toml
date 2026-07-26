@@ -22,6 +22,9 @@ pix_fmt = "yuv420p"       # broad playback compatibility (QuickTime, browsers, s
 audio_bitrate = "192k"    # AAC bitrate
 audio_sample_rate = 44100 # forced on every segment so concat can stream-copy
 background = "black"      # pad color for letter/pillar-boxing (ffmpeg color name or hex, e.g. "0x101010")
+fade_seconds = 0.5        # one fade at a "transition":"fade" page boundary; dips to background
+                          # inside the page's own duration (never overlaps pages), clamped so at
+                          # least half of every page stays at full brightness; 0 = always cut
 
 [caption]
 # Styling for burned-in captions (master captions=true). Text is rendered in Go

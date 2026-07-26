@@ -4,6 +4,33 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Fade transitions** (ADR-0007). A page whose manifest `transition` is
+  `"fade"` now fades out at its end while the next page fades in at its start,
+  dipping to the canvas `background` colour — the field is no longer accepted
+  and then ignored. Both fades render **inside each page's own duration**, so
+  the total is still the sum of the audio durations and the chapter / caption
+  timelines are untouched; the final concat remains a stream copy.
+- `fade_seconds` — new `[video]` config key and per-call `master` argument
+  (default `0.5`). Clamped so at least half of every page stays at full
+  brightness (one fade ≤ duration/2, two ≤ duration/4 each); a fade shorter than
+  one frame is dropped; `0` renders every boundary as a cut.
+- `master` result now reports `fades_applied` (page boundaries rendered as a
+  fade).
+
+### Notes
+
+- The last page's `transition` is ignored — it describes the boundary *into the
+  next page*, and there is none. A trailing fade-out is an outro, deliberately
+  left to a future option.
+- Audio is never faded: narration must not be clipped, and the audio length is
+  what defines a page's duration.
+- A true cross-page dissolve (`xfade`) remains out of scope — it would overlap
+  pages and break the exact-duration guarantee. See ADR-0007 for the analysis.
+
 ## [0.3.0] - 2026-07-12
 
 ### Removed

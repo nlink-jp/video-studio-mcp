@@ -66,9 +66,12 @@ Never `go build` directly — always `make build` (outputs to `dist/`).
 - **Symlink vs missing** — `VerifyRegular` returns `path_not_allowed` for a
   symlink/non-regular entry (surfaced immediately) but a plain lstat error for a
   missing file (collected → `manifest_incomplete`). Do not collapse the two.
-- **Captions/fade are accepted but not rendered** — Phase 1 honors `cut` only
-  and ignores `caption`. Don't silently drop unknown transitions; reject them as
-  `invalid_manifest`.
+- **A fade never crosses a page boundary** — both halves of a `"fade"`
+  transition are rendered *inside* the neighbouring pages' own segments
+  (`fadeDurations` → `segmentArgs`). Never reach for `xfade`/`acrossfade`: they
+  overlap pages, which breaks the Σ-audio duration, the chapter/SRT timelines,
+  and the stream-copy concat (ADR-0007). Unknown transitions are still rejected
+  as `invalid_manifest` — don't silently drop them.
 - **Chapters ride the concat step** — per-page chapter markers are an ffmetadata
   file (`;FFMETADATA1` + `[CHAPTER]` blocks) fed as the second concat input with
   `-map 0 -map_metadata 1`; boundaries come from the same probed durations used
@@ -116,6 +119,13 @@ Never `go build` directly — always `make build` (outputs to `dist/`).
 - **ADR-0006**: closed captions — `soft_captions` embeds a `mov_text` subtitle
   track (SRT built per-page, muxed at concat); additive to the burn-in `captions`
   flag; complementary (soft = toggleable/accessible, burn = muted-autoplay).
+- **ADR-0007**: fade transitions as a **within-page dip**, not a cross-page
+  `xfade` — `transition:"fade"` fades out at the end of its page and in at the
+  start of the next, inside each page's own duration, so Σ-audio duration,
+  chapter/caption timing, and the stream-copy concat all survive. `fade_seconds`
+  (config + per call, default 0.5) clamped so half of every page stays at full
+  brightness; sub-frame fades dropped; last page's transition ignored; audio
+  never faded; reported as `fades_applied`.
 
 Full texts: [`docs/en/adr/`](docs/en/adr/) / [`docs/ja/adr/`](docs/ja/adr/).
 
@@ -126,5 +136,6 @@ Full texts: [`docs/en/adr/`](docs/en/adr/) / [`docs/ja/adr/`](docs/ja/adr/).
   — module map, render pipeline, error model, testing strategy.
 - [`docs/ja/video-studio-mcp-rfp.ja.md`](docs/ja/video-studio-mcp-rfp.ja.md) /
   [`docs/en/video-studio-mcp-rfp.md`](docs/en/video-studio-mcp-rfp.md) —
-  approved RFP; canonical source for scope (pure compositor; captions +
-  transitions = Phase 2; workflow skill = separate skills-series project).
+  approved RFP; canonical source for scope (pure compositor; workflow skill =
+  separate skills-series project). Its "captions + transitions = Phase 2" note
+  is now shipped — ADR-0004/0006 (captions) and ADR-0007 (fade).
