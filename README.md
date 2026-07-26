@@ -18,8 +18,11 @@ voice-studio-mcp  ─▶  page audio ─┐
 slides ─▶ per-page images ────────┘
 ```
 
-> **Status:** Phase 1 scaffold. Tools: `get_usage`, `master`. Captions and
-> transitions are Phase 2 (see the RFP).
+> **Status:** Released. Tools: `get_usage`, `master`, `check_job`. Captions ship
+> in both forms — burned-in (`captions`) and a closed-caption track
+> (`soft_captions`). Non-cut transitions are **not** implemented: `transition:
+> fade` is accepted by the manifest but rendered as a hard cut. See
+> [CHANGELOG.md](CHANGELOG.md) for the current version.
 
 ## Why an MCP server (not a CLI)
 

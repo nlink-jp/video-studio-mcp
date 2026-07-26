@@ -16,8 +16,11 @@ voice-studio-mcp  ─▶  ページ音声 ─┐
 スライド ─▶ ページ画像 ───────────┘
 ```
 
-> **状態:** Phase 1 スキャフォールド。ツール: `get_usage`, `master`。字幕・
-> トランジションは Phase 2（RFP 参照）。
+> **状態:** リリース済み。ツール: `get_usage`, `master`, `check_job`。字幕は
+> 焼き込み（`captions`）とクローズドキャプショントラック（`soft_captions`）の
+> 両形式とも実装済み。非カットのトランジションは**未実装** — `transition:
+> fade` はマニフェスト上受理するがハードカットで描画する。現行バージョンは
+> [CHANGELOG.md](CHANGELOG.md) を参照。
 
 ## なぜ CLI でなく MCP か
 
