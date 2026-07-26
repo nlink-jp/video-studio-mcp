@@ -49,6 +49,11 @@ type VideoConfig struct {
 	AudioBitrate    string `toml:"audio_bitrate"`
 	AudioSampleRate int    `toml:"audio_sample_rate"`
 	Background      string `toml:"background"` // pad color for letter/pillar-boxing (ffmpeg color name or hex)
+	// FadeSeconds is the length of one fade at a page boundary whose manifest
+	// transition is "fade" (ADR-0007). Clamped per page so at least half of
+	// every page stays at full brightness; 0 disables fading (every boundary
+	// becomes a cut).
+	FadeSeconds float64 `toml:"fade_seconds"`
 }
 
 // CaptionConfig controls burned-in caption rendering (opt-in via master's
@@ -87,6 +92,7 @@ func Default() *Config {
 			AudioBitrate:    "192k",
 			AudioSampleRate: 44100,
 			Background:      "black",
+			FadeSeconds:     0.5,
 		},
 		Caption: CaptionConfig{
 			FontSize:   48,
@@ -140,8 +146,19 @@ func (v VideoConfig) Validate() error {
 	if v.AudioSampleRate < 8000 {
 		return fmt.Errorf("audio_sample_rate must be >= 8000, got %d", v.AudioSampleRate)
 	}
+	// A fade longer than maxFadeSeconds is a fade for a page that does not
+	// exist; the per-page clamp would swallow it silently, so reject it here
+	// where the caller can see the mistake.
+	if v.FadeSeconds < 0 || v.FadeSeconds > maxFadeSeconds {
+		return fmt.Errorf("fade_seconds must be within [0, %g], got %g", maxFadeSeconds, v.FadeSeconds)
+	}
 	return nil
 }
+
+// maxFadeSeconds bounds fade_seconds. Half of it is the longest fade any page
+// can actually receive (the per-page clamp keeps half of each page at full
+// brightness), which is already far past anything a presentation deck wants.
+const maxFadeSeconds float64 = 10
 
 func (c *Config) validate() error {
 	if err := c.Video.Validate(); err != nil {

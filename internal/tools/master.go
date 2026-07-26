@@ -34,6 +34,7 @@ func registerMaster(srv *mcpserver.Server, d *Deps) {
     "width": {"type": "integer", "description": "Override the output canvas width (even, >=16) for this render; e.g. 1080 with height 1920 for 9:16 vertical. Default: server [video] config."},
     "height": {"type": "integer", "description": "Override the output canvas height (even, >=16) for this render. Default: server [video] config."},
     "fps": {"type": "integer", "description": "Override the output frame rate (>=1) for this render. Default: server [video] config."},
+    "fade_seconds": {"type": "number", "description": "Length of one fade at a page boundary whose manifest \"transition\" is \"fade\" (default: server [video] config, 0.5). The fade dips to the canvas background inside each page's own duration, so total duration and chapter timing are unaffected; it is clamped so at least half of every page stays at full brightness. 0 disables fading (every boundary becomes a cut)."},
     "keep_intermediates": {"type": "boolean", "description": "Keep the per-page segments and caption PNGs under output/tmp after a successful render (default false = discard)."},
     "async": {"type": "boolean", "description": "Render in the background and return a job_id immediately (default false); poll check_job for progress and the result. Use for long decks that would otherwise block the call."}
   },
@@ -41,18 +42,19 @@ func registerMaster(srv *mcpserver.Server, d *Deps) {
 }`),
 	}, func(ctx context.Context, args json.RawMessage) (any, error) {
 		in := struct {
-			WorkspaceID       string `json:"workspace_id"`
-			WorkspaceRoot     string `json:"workspace_root"`
-			ManifestPath      string `json:"manifest_path"`
-			OutputName        string `json:"output_name"`
-			Chapters          *bool  `json:"chapters"`
-			Captions          *bool  `json:"captions"`
-			SoftCaptions      *bool  `json:"soft_captions"`
-			Width             *int   `json:"width"`
-			Height            *int   `json:"height"`
-			FPS               *int   `json:"fps"`
-			KeepIntermediates *bool  `json:"keep_intermediates"`
-			Async             *bool  `json:"async"`
+			WorkspaceID       string   `json:"workspace_id"`
+			WorkspaceRoot     string   `json:"workspace_root"`
+			ManifestPath      string   `json:"manifest_path"`
+			OutputName        string   `json:"output_name"`
+			Chapters          *bool    `json:"chapters"`
+			Captions          *bool    `json:"captions"`
+			SoftCaptions      *bool    `json:"soft_captions"`
+			Width             *int     `json:"width"`
+			Height            *int     `json:"height"`
+			FPS               *int     `json:"fps"`
+			FadeSeconds       *float64 `json:"fade_seconds"`
+			KeepIntermediates *bool    `json:"keep_intermediates"`
+			Async             *bool    `json:"async"`
 		}{}
 		if err := unmarshalStrict(args, &in); err != nil {
 			return nil, err
@@ -66,7 +68,7 @@ func registerMaster(srv *mcpserver.Server, d *Deps) {
 		keepIntermediates := in.KeepIntermediates != nil && *in.KeepIntermediates
 		async := in.Async != nil && *in.Async
 
-		// Per-call canvas override on top of the server [video] config.
+		// Per-call canvas / fade override on top of the server [video] config.
 		video := d.Cfg.Video
 		if in.Width != nil {
 			video.Width = *in.Width
@@ -77,8 +79,11 @@ func registerMaster(srv *mcpserver.Server, d *Deps) {
 		if in.FPS != nil {
 			video.FPS = *in.FPS
 		}
+		if in.FadeSeconds != nil {
+			video.FadeSeconds = *in.FadeSeconds
+		}
 		if err := video.Validate(); err != nil {
-			return nil, toolerr.Newf(toolerr.CodeInvalidArguments, "invalid canvas override: %v", err)
+			return nil, toolerr.Newf(toolerr.CodeInvalidArguments, "invalid render override: %v", err)
 		}
 		if in.WorkspaceID == "" {
 			return nil, toolerr.New(toolerr.CodeMissingArgument, "workspace_id is required")

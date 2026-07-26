@@ -3,6 +3,7 @@ package master
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -231,7 +232,7 @@ func TestConcatListQuoting(t *testing.T) {
 func TestSegmentArgsPadColor(t *testing.T) {
 	v := config.Default().Video
 	v.Background = "white"
-	args := strings.Join(segmentArgs(v, "/i.png", "/a.wav", "", 1.25, "/o.mp4"), " ")
+	args := strings.Join(segmentArgs(v, "/i.png", "/a.wav", "", 1.25, 0, 0, "/o.mp4"), " ")
 	if !strings.Contains(args, "pad=1920:1080:(ow-iw)/2:(oh-ih)/2:white") {
 		t.Errorf("pad color not applied: %s", args)
 	}
@@ -245,11 +246,87 @@ func TestSegmentArgsPadColor(t *testing.T) {
 
 func TestSegmentArgsCaptionOverlay(t *testing.T) {
 	v := config.Default().Video
-	args := strings.Join(segmentArgs(v, "/i.png", "/a.wav", "/c.png", 1.0, "/o.mp4"), " ")
+	args := strings.Join(segmentArgs(v, "/i.png", "/a.wav", "/c.png", 1.0, 0, 0, "/o.mp4"), " ")
 	for _, want := range []string{"-i /c.png", "-filter_complex", "overlay=0:0", "-map [v]", "-map 1:a"} {
 		if !strings.Contains(args, want) {
 			t.Errorf("caption segment missing %q: %s", want, args)
 		}
+	}
+}
+
+func TestFadeDurations(t *testing.T) {
+	const fps = 30
+	tests := []struct {
+		name            string
+		cfgSec, durSec  float64
+		in, out         bool
+		wantIn, wantOut float64
+	}{
+		{name: "no boundary fades", cfgSec: 0.5, durSec: 4, wantIn: 0, wantOut: 0},
+		{name: "fade in only", cfgSec: 0.5, durSec: 4, in: true, wantIn: 0.5},
+		{name: "fade out only", cfgSec: 0.5, durSec: 4, out: true, wantOut: 0.5},
+		{name: "both fades fit", cfgSec: 0.5, durSec: 4, in: true, out: true, wantIn: 0.5, wantOut: 0.5},
+		// Half the page must stay at full brightness: one fade gets dur/2 at most.
+		{name: "single fade clamped", cfgSec: 0.5, durSec: 0.6, out: true, wantOut: 0.3},
+		// ...and with two fades, dur/4 each.
+		{name: "both fades clamped", cfgSec: 0.5, durSec: 0.8, in: true, out: true, wantIn: 0.2, wantOut: 0.2},
+		// A sub-frame fade is not a transition (1/30 s ≈ 0.033).
+		{name: "sub-frame fade dropped", cfgSec: 0.5, durSec: 0.05, in: true, out: true},
+		{name: "fade disabled by config", cfgSec: 0, durSec: 4, in: true, out: true},
+		{name: "zero duration page", cfgSec: 0.5, durSec: 0, in: true, out: true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			gotIn, gotOut := fadeDurations(tc.cfgSec, tc.durSec, fps, tc.in, tc.out)
+			if gotIn != tc.wantIn || gotOut != tc.wantOut {
+				t.Errorf("fadeDurations(%g, %g, %d, %v, %v) = (%g, %g), want (%g, %g)",
+					tc.cfgSec, tc.durSec, fps, tc.in, tc.out, gotIn, gotOut, tc.wantIn, tc.wantOut)
+			}
+		})
+	}
+}
+
+func TestSegmentArgsFade(t *testing.T) {
+	v := config.Default().Video
+	v.Background = "white"
+
+	// A fade-out starts at durSec-fadeOut and dips to the canvas background.
+	args := strings.Join(segmentArgs(v, "/i.png", "/a.wav", "", 4.0, 0.5, 0.5, "/o.mp4"), " ")
+	for _, want := range []string{
+		"fade=t=in:st=0:d=0.500:c=white",
+		"fade=t=out:st=3.500:d=0.500:c=white",
+	} {
+		if !strings.Contains(args, want) {
+			t.Errorf("segment args missing %q: %s", want, args)
+		}
+	}
+	// Still a plain -vf chain appended to scale/pad — no filter_complex needed.
+	if !strings.Contains(args, "-vf scale=") || strings.Contains(args, "filter_complex") {
+		t.Errorf("faded no-caption segment should stay on -vf: %s", args)
+	}
+
+	// Without fades, no fade filter appears at all.
+	plain := strings.Join(segmentArgs(v, "/i.png", "/a.wav", "", 4.0, 0, 0, "/o.mp4"), " ")
+	if strings.Contains(plain, "fade=") {
+		t.Errorf("unfaded segment must carry no fade filter: %s", plain)
+	}
+}
+
+func TestSegmentArgsFadeFollowsCaptionOverlay(t *testing.T) {
+	// A burned-in caption must fade with its page, so the fade has to come after
+	// the overlay in the filter graph — not before it.
+	v := config.Default().Video
+	args := strings.Join(segmentArgs(v, "/i.png", "/a.wav", "/c.png", 2.0, 0.25, 0, "/o.mp4"), " ")
+	overlay := strings.Index(args, "overlay=0:0")
+	fade := strings.Index(args, "fade=t=in")
+	if overlay < 0 || fade < 0 {
+		t.Fatalf("expected both overlay and fade filters: %s", args)
+	}
+	if fade < overlay {
+		t.Errorf("fade must follow the caption overlay: %s", args)
+	}
+	if !strings.Contains(args, "format=auto,fade=t=in:st=0:d=0.250") {
+		t.Errorf("fade should chain onto the overlay output: %s", args)
 	}
 }
 
@@ -499,5 +576,144 @@ func TestBuildSoftCaptions(t *testing.T) {
 	}
 	if strings.Contains(strings.Join(fr2.cmds[len(fr2.cmds)-1], " "), "mov_text") {
 		t.Errorf("no captions must not add a subtitle track")
+	}
+}
+
+// segFor returns the recorded ffmpeg invocation that produced seg_<n>.mp4.
+func segFor(t *testing.T, fr *fakeRunner, n int) string {
+	t.Helper()
+	want := fmt.Sprintf("seg_%03d.mp4", n)
+	for _, c := range fr.cmds {
+		j := strings.Join(c, " ")
+		if strings.Contains(j, want) {
+			return j
+		}
+	}
+	t.Fatalf("no ffmpeg call produced %s: %v", want, fr.cmds)
+	return ""
+}
+
+func TestBuildFadeTransitions(t *testing.T) {
+	// p1 fades into p2, p2 fades into p3, p3's transition has no next boundary.
+	pages := []manifest.Page{
+		{Image: "images/p01.png", Audio: "audio/p01.wav", Transition: manifest.TransitionFade},
+		{Image: "images/p02.png", Audio: "audio/p02.wav", Transition: manifest.TransitionFade},
+		{Image: "images/p03.png", Audio: "audio/p03.wav", Transition: manifest.TransitionFade},
+	}
+	ws := seed(t, pages)
+	fr := &fakeRunner{dur: "4.000"}
+	m := newMaster(fr)
+
+	res, err := m.Build(context.Background(), ws, "deck", pages, Options{Chapters: true, KeepIntermediate: true})
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+
+	// Two boundaries, so two fades — the last page's transition is ignored.
+	if res.FadesApplied != 2 {
+		t.Errorf("fades_applied: %d (want 2)", res.FadesApplied)
+	}
+	// The fade lives inside each page's own duration, so the total is still the
+	// sum of the audio durations.
+	if res.DurationSeconds < 11.99 || res.DurationSeconds > 12.01 {
+		t.Errorf("duration: %v (want 12.0 — fades must not shorten the timeline)", res.DurationSeconds)
+	}
+
+	seg1, seg2, seg3 := segFor(t, fr, 1), segFor(t, fr, 2), segFor(t, fr, 3)
+	if strings.Contains(seg1, "fade=t=in") || !strings.Contains(seg1, "fade=t=out:st=3.500:d=0.500") {
+		t.Errorf("page 1 should fade out only: %s", seg1)
+	}
+	if !strings.Contains(seg2, "fade=t=in:st=0:d=0.500") || !strings.Contains(seg2, "fade=t=out:st=3.500:d=0.500") {
+		t.Errorf("page 2 should fade in and out: %s", seg2)
+	}
+	if !strings.Contains(seg3, "fade=t=in:st=0:d=0.500") || strings.Contains(seg3, "fade=t=out") {
+		t.Errorf("page 3 should fade in only (no trailing fade): %s", seg3)
+	}
+
+	// Chapter boundaries stay on the audio timeline: 0-4000-8000-12000.
+	meta, err := os.ReadFile(ws.Path(workspace.DirOutput, "tmp", "ffmetadata.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"START=0", "END=4000", "START=4000", "END=8000", "START=8000", "END=12000"} {
+		if !strings.Contains(string(meta), want) {
+			t.Errorf("fades shifted the chapter timeline, missing %q:\n%s", want, meta)
+		}
+	}
+
+	// The join is still a stream copy — no cross-page filter graph.
+	concat := strings.Join(fr.cmds[len(fr.cmds)-1], " ")
+	if !strings.Contains(concat, "-c copy") || strings.Contains(concat, "xfade") {
+		t.Errorf("concat must stay a stream copy: %s", concat)
+	}
+}
+
+func TestBuildCutTransitionsCarryNoFade(t *testing.T) {
+	pages := []manifest.Page{
+		{Image: "images/p01.png", Audio: "audio/p01.wav", Transition: manifest.TransitionCut},
+		{Image: "images/p02.png", Audio: "audio/p02.wav"}, // default = cut
+	}
+	ws := seed(t, pages)
+	fr := &fakeRunner{dur: "2.000"}
+	m := newMaster(fr)
+
+	res, err := m.Build(context.Background(), ws, "deck", pages, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.FadesApplied != 0 {
+		t.Errorf("fades_applied: %d (want 0)", res.FadesApplied)
+	}
+	for _, c := range fr.cmds {
+		if strings.Contains(strings.Join(c, " "), "fade=") {
+			t.Errorf("cut-only deck must carry no fade filter: %v", c)
+		}
+	}
+}
+
+func TestBuildFadeSecondsZeroDisablesFading(t *testing.T) {
+	pages := []manifest.Page{
+		{Image: "images/p01.png", Audio: "audio/p01.wav", Transition: manifest.TransitionFade},
+		{Image: "images/p02.png", Audio: "audio/p02.wav"},
+	}
+	ws := seed(t, pages)
+	fr := &fakeRunner{dur: "2.000"}
+	m := newMaster(fr)
+	m.Cfg.FadeSeconds = 0
+
+	res, err := m.Build(context.Background(), ws, "deck", pages, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.FadesApplied != 0 {
+		t.Errorf("fades_applied with fade_seconds=0: %d (want 0)", res.FadesApplied)
+	}
+	if strings.Contains(segFor(t, fr, 1), "fade=") {
+		t.Errorf("fade_seconds=0 must render every boundary as a cut: %s", segFor(t, fr, 1))
+	}
+}
+
+func TestBuildFadeClampedOnShortPages(t *testing.T) {
+	// 0.8s pages: page 2 fades on both sides, so each fade gets dur/4 = 0.2s.
+	pages := []manifest.Page{
+		{Image: "images/p01.png", Audio: "audio/p01.wav", Transition: manifest.TransitionFade},
+		{Image: "images/p02.png", Audio: "audio/p02.wav", Transition: manifest.TransitionFade},
+		{Image: "images/p03.png", Audio: "audio/p03.wav"},
+	}
+	ws := seed(t, pages)
+	fr := &fakeRunner{dur: "0.800"}
+	m := newMaster(fr)
+
+	if _, err := m.Build(context.Background(), ws, "deck", pages, Options{KeepIntermediate: true}); err != nil {
+		t.Fatal(err)
+	}
+	// Page 1 has one fade → 0.8/2 = 0.4s, starting at 0.4s.
+	if !strings.Contains(segFor(t, fr, 1), "fade=t=out:st=0.400:d=0.400") {
+		t.Errorf("page 1 fade not clamped to half the page: %s", segFor(t, fr, 1))
+	}
+	// Page 2 has two → 0.2s each, the trailing one starting at 0.6s.
+	seg2 := segFor(t, fr, 2)
+	if !strings.Contains(seg2, "fade=t=in:st=0:d=0.200") || !strings.Contains(seg2, "fade=t=out:st=0.600:d=0.200") {
+		t.Errorf("page 2 fades not clamped to a quarter each: %s", seg2)
 	}
 }

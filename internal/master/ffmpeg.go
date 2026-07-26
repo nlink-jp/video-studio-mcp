@@ -2,6 +2,7 @@ package master
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
@@ -17,11 +18,19 @@ import (
 // capPath, when non-empty, is a canvas-sized transparent caption PNG composited
 // over the page with the core overlay filter (so no libfreetype-enabled ffmpeg
 // is required); positioning is already baked into the PNG, hence overlay=0:0.
-func segmentArgs(v config.VideoConfig, imgPath, audioPath, capPath string, durSec float64, outPath string) []string {
+//
+// fadeIn / fadeOut are the fade lengths in seconds for this page's leading and
+// trailing boundary (0 = none, see fadeDurations). They dip to the canvas
+// background colour inside this page's own duration — never overlapping the
+// neighbouring page — so the segment keeps its exact length and the final
+// concat stays a stream copy (ADR-0007). The fades are appended after the
+// caption overlay so a burned-in caption fades with its page.
+func segmentArgs(v config.VideoConfig, imgPath, audioPath, capPath string, durSec, fadeIn, fadeOut float64, outPath string) []string {
 	scalePad := fmt.Sprintf(
 		"scale=%d:%d:force_original_aspect_ratio=decrease,pad=%d:%d:(ow-iw)/2:(oh-ih)/2:%s,setsar=1,fps=%d",
 		v.Width, v.Height, v.Width, v.Height, v.Background, v.FPS,
 	)
+	fades := fadeFilters(v.Background, durSec, fadeIn, fadeOut)
 	args := []string{
 		"-y",
 		"-loop", "1",
@@ -29,12 +38,12 @@ func segmentArgs(v config.VideoConfig, imgPath, audioPath, capPath string, durSe
 		"-i", audioPath,
 	}
 	if capPath == "" {
-		args = append(args, "-t", fmt.Sprintf("%.3f", durSec), "-vf", scalePad)
+		args = append(args, "-t", fmt.Sprintf("%.3f", durSec), "-vf", scalePad+fades)
 	} else {
 		args = append(args,
 			"-i", capPath,
 			"-t", fmt.Sprintf("%.3f", durSec),
-			"-filter_complex", "[0:v]"+scalePad+"[bg];[bg][2:v]overlay=0:0:format=auto[v]",
+			"-filter_complex", "[0:v]"+scalePad+"[bg];[bg][2:v]overlay=0:0:format=auto"+fades+"[v]",
 			"-map", "[v]",
 			"-map", "1:a",
 		)
@@ -52,6 +61,55 @@ func segmentArgs(v config.VideoConfig, imgPath, audioPath, capPath string, durSe
 		"-movflags", "+faststart",
 		outPath,
 	)
+}
+
+// fadeFilters renders the fade-in / fade-out filters appended to one page's
+// video chain, each prefixed with a comma so it chains onto whatever precedes
+// it (the empty string when neither fade applies). Both dip to bg, the canvas
+// background colour, so a non-black canvas stays coherent with its padding.
+func fadeFilters(bg string, durSec, fadeIn, fadeOut float64) string {
+	var b strings.Builder
+	if fadeIn > 0 {
+		fmt.Fprintf(&b, ",fade=t=in:st=0:d=%.3f:c=%s", fadeIn, bg)
+	}
+	if fadeOut > 0 {
+		fmt.Fprintf(&b, ",fade=t=out:st=%.3f:d=%.3f:c=%s", durSec-fadeOut, fadeOut, bg)
+	}
+	return b.String()
+}
+
+// fadeDurations returns the fade-in and fade-out lengths for one page whose
+// duration is durSec, given the configured fade length and which of its two
+// boundaries fade.
+//
+// Two clamps apply (ADR-0007). Each page keeps at least half its duration at
+// full brightness, so with n fades on the page each gets at most
+// durSec/2/n — a 0.5s fade on a 0.8s page becomes 0.2s on each side rather
+// than swallowing the page. And a fade shorter than one frame is dropped: at
+// that length it is not a transition, just an extra filter and a rounding
+// artifact.
+func fadeDurations(cfgSec, durSec float64, fps int, in, out bool) (float64, float64) {
+	n := 0
+	if in {
+		n++
+	}
+	if out {
+		n++
+	}
+	if n == 0 || cfgSec <= 0 || durSec <= 0 {
+		return 0, 0
+	}
+	d := math.Min(cfgSec, durSec/2/float64(n))
+	if fps > 0 && d < 1/float64(fps) {
+		return 0, 0
+	}
+	if in && out {
+		return d, d
+	}
+	if in {
+		return d, 0
+	}
+	return 0, d
 }
 
 // concatArgs builds the final concat-demuxer invocation that joins the

@@ -46,19 +46,24 @@ type Result struct {
 	Chapters        int     `json:"chapters"`
 	CaptionsBurned  int     `json:"captions_burned"`
 	SoftCaptionCues int     `json:"soft_caption_cues"`
-	Width           int     `json:"width"`
-	Height          int     `json:"height"`
-	FPS             int     `json:"fps"`
+	// FadesApplied is the number of page boundaries rendered as a fade, counted
+	// on the outgoing page. A "fade" transition whose fade would be shorter than
+	// one frame is dropped and not counted (ADR-0007).
+	FadesApplied int `json:"fades_applied"`
+	Width        int `json:"width"`
+	Height       int `json:"height"`
+	FPS          int `json:"fps"`
 }
 
 // resolved is one page with its workspace-relative asset paths, chapter title,
-// caption text, and probed audio duration.
+// caption text, transition into the next page, and probed audio duration.
 type resolved struct {
-	imgRel   string
-	audioRel string
-	title    string
-	caption  string
-	durSec   float64
+	imgRel     string
+	audioRel   string
+	title      string
+	caption    string
+	transition string
+	durSec     float64
 }
 
 // Build validates that every page's image and audio exist in the workspace,
@@ -114,7 +119,13 @@ func (m *Master) Build(ctx context.Context, ws *workspace.Workspace, manifestSte
 			missing = append(missing, miss)
 			continue
 		}
-		items = append(items, resolved{imgRel: imgRel, audioRel: audioRel, title: p.Title, caption: p.Caption})
+		items = append(items, resolved{
+			imgRel:     imgRel,
+			audioRel:   audioRel,
+			title:      p.Title,
+			caption:    p.Caption,
+			transition: p.Transition,
+		})
 	}
 	if len(missing) > 0 {
 		return Result{}, toolerr.Newf(toolerr.CodeManifestIncomplete,
@@ -149,6 +160,7 @@ func (m *Master) Build(ctx context.Context, ws *workspace.Workspace, manifestSte
 	report("rendering", 0, len(items))
 	segRels := make([]string, 0, len(items))
 	captionsBurned := 0
+	fadesApplied := 0
 	for i := range items {
 		capPath := ""
 		if opts.Captions && strings.TrimSpace(items[i].caption) != "" {
@@ -163,8 +175,20 @@ func (m *Master) Build(ctx context.Context, ws *workspace.Workspace, manifestSte
 			capPath = ws.Path(capRel)
 			captionsBurned++
 		}
+		// A "fade" transition fades out at the end of its own page and in at the
+		// start of the next, inside each page's duration — so this page fades in
+		// when the *previous* page asked for it. The last page's transition has
+		// no boundary to describe and is ignored (ADR-0007).
+		fadeIn, fadeOut := fadeDurations(
+			m.Cfg.FadeSeconds, items[i].durSec, m.Cfg.FPS,
+			i > 0 && isFade(items[i-1].transition),
+			i < len(items)-1 && isFade(items[i].transition),
+		)
+		if fadeOut > 0 {
+			fadesApplied++
+		}
 		segRel := filepath.Join(tmpRel, fmt.Sprintf("seg_%03d.mp4", i+1))
-		args := segmentArgs(m.Cfg, ws.Path(items[i].imgRel), ws.Path(items[i].audioRel), capPath, items[i].durSec, ws.Path(segRel))
+		args := segmentArgs(m.Cfg, ws.Path(items[i].imgRel), ws.Path(items[i].audioRel), capPath, items[i].durSec, fadeIn, fadeOut, ws.Path(segRel))
 		if err := m.runFFmpeg(ctx, args); err != nil {
 			return Result{}, err
 		}
@@ -240,11 +264,16 @@ func (m *Master) Build(ctx context.Context, ws *workspace.Workspace, manifestSte
 		Chapters:        chapterCount,
 		CaptionsBurned:  captionsBurned,
 		SoftCaptionCues: softCaptionCues,
+		FadesApplied:    fadesApplied,
 		Width:           m.Cfg.Width,
 		Height:          m.Cfg.Height,
 		FPS:             m.Cfg.FPS,
 	}, nil
 }
+
+// isFade reports whether a manifest transition value asks for a fade. Every
+// other accepted value ("", "cut") is a hard cut.
+func isFade(transition string) bool { return transition == manifest.TransitionFade }
 
 // buildSRT renders an SRT closed-caption track from the pages that carry a
 // caption, timed by the accumulated per-page durations (the same timeline as

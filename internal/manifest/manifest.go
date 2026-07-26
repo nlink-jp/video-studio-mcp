@@ -13,9 +13,16 @@ import (
 	"github.com/nlink-jp/video-studio-mcp/internal/toolerr"
 )
 
+// Transition values accepted in a page's transition field. TransitionCut (also
+// the zero value) joins the next page with a hard cut; TransitionFade dips to
+// the canvas background at the boundary — see ADR-0007.
+const (
+	TransitionCut  = "cut"
+	TransitionFade = "fade"
+)
+
 // Page is one slide: a still image shown for the length of its audio, with an
-// optional chapter title, burned-in caption (Phase 2), and transition into the
-// next page.
+// optional chapter title, caption, and transition into the next page.
 type Page struct {
 	Image      string `json:"image"`
 	Audio      string `json:"audio"`
@@ -24,10 +31,10 @@ type Page struct {
 	Transition string `json:"transition,omitempty"`
 }
 
-// knownTransitions are accepted transition values. Phase 1 renders every page
-// with a hard cut; "fade" is accepted for forward compatibility but currently
-// treated as "cut" (see the render pipeline ADR).
-var knownTransitions = map[string]bool{"": true, "cut": true, "fade": true}
+// knownTransitions are accepted transition values; the empty string means the
+// default (cut). A page's transition describes the boundary *into the next
+// page*, so it is ignored on the last page.
+var knownTransitions = map[string]bool{"": true, TransitionCut: true, TransitionFade: true}
 
 // maxReportedErrors bounds how many per-line problems one error reports.
 const maxReportedErrors = 20
