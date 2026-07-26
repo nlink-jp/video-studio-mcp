@@ -4,6 +4,18 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- **`--version` now works.** The binary only implemented a `version`
+  subcommand, so `video-studio-mcp --version` failed with "unknown flag" — and
+  the shared org homebrew formula template tests exactly that invocation, so
+  `brew test video-studio-mcp` failed. `rootCmd.Version` is now set, which
+  makes cobra provide the flag. The `version` subcommand is unchanged, and both
+  spellings print the identical string (bare version, no "<name> version "
+  prefix).
+
 ## [0.4.0] - 2026-07-26
 
 ### Added

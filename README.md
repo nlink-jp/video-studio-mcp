@@ -30,7 +30,8 @@ slides ─▶ per-page images ────────┘
 The intended client is Claude Code / Cowork. A Cowork VM sandbox typically
 cannot launch a local CLI, but it *can* call a registered MCP tool — so the
 MCP interface is the product. A `serve` subcommand is the entry point; the CLI
-side (`doctor`, `version`) is for local diagnostics.
+side (`doctor`, `version`) is for local diagnostics. The version is also
+available as `--version`, which prints the same string as `version`.
 
 ## Requirements
 

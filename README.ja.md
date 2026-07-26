@@ -28,7 +28,8 @@ voice-studio-mcp  ─▶  ページ音声 ─┐
 想定クライアントは Claude Code / Cowork。Cowork の VM サンドボックスは
 ローカル CLI を直接起動できない公算が高いが、登録済みの MCP ツールなら呼べる ——
 だから MCP インターフェースが本体である。`serve` サブコマンドが入口で、CLI 側
-（`doctor`, `version`）はローカル診断用。
+（`doctor`, `version`）はローカル診断用。バージョンは `--version` でも取得でき、
+`version` サブコマンドと同一の文字列を出力する。
 
 ## 必要環境
 

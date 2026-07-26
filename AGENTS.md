@@ -25,7 +25,8 @@ Never `go build` directly — always `make build` (outputs to `dist/`).
 
 ## Structure
 
-- `cmd/` — cobra commands: `serve` (default), `doctor`, `version`.
+- `cmd/` — cobra commands: `serve` (default), `doctor`, `version` (also
+  reachable as the `--version` flag, which the org homebrew formula tests).
 - `internal/jsonrpc/`, `internal/transport/`, `internal/mcpserver/`,
   `internal/toolerr/`, `internal/logging/` — MCP skeleton (ported verbatim
   from voice-studio-mcp / data-toolbox-mcp).

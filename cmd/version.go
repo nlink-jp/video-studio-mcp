@@ -19,4 +19,14 @@ var versionCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(versionCmd)
+
+	// Every tool in the org answers `--version`, and the shared homebrew
+	// formula template tests for it — without the flag `brew test` fails on
+	// "unknown flag". Setting Version here (rather than in the rootCmd literal)
+	// keeps the linker-injected value as the single source; cobra adds the flag
+	// on its own. The `version` subcommand stays for compatibility, and the
+	// template below strips cobra's "<name> version " prefix so both spellings
+	// print exactly the same string.
+	rootCmd.Version = Version
+	rootCmd.SetVersionTemplate("{{.Version}}\n")
 }

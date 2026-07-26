@@ -1,0 +1,51 @@
+package cmd
+
+import (
+	"bytes"
+	"testing"
+)
+
+// The shared homebrew formula template — used by every tool in the org — runs
+// `<binary> --version` in its test block, which is how the missing flag was
+// found. Both spellings must work, and must print the same string.
+//
+// Deliberately reads the production wiring instead of assigning rootCmd.Version
+// itself: that assignment is the fix, so a test that repeats it would pass
+// against the broken binary.
+func TestVersionFlagAndSubcommandAgree(t *testing.T) {
+	if rootCmd.Version == "" {
+		t.Fatal("rootCmd.Version is empty: cobra never registers --version, so " +
+			"`--version` fails with \"unknown flag\" and `brew test` fails with it")
+	}
+	if rootCmd.Version != Version {
+		t.Errorf("rootCmd.Version = %q, want the linker-injected Version %q", rootCmd.Version, Version)
+	}
+
+	t.Cleanup(func() {
+		rootCmd.SetOut(nil)
+		rootCmd.SetErr(nil)
+		rootCmd.SetArgs(nil)
+	})
+
+	run := func(args ...string) string {
+		t.Helper()
+		var out bytes.Buffer
+		rootCmd.SetOut(&out)
+		rootCmd.SetErr(&out)
+		rootCmd.SetArgs(args)
+		if err := rootCmd.Execute(); err != nil {
+			t.Fatalf("%v: %v", args, err)
+		}
+		return out.String()
+	}
+
+	flag := run("--version")
+	sub := run("version")
+
+	if want := Version + "\n"; flag != want {
+		t.Errorf("--version printed %q, want %q", flag, want)
+	}
+	if flag != sub {
+		t.Errorf("--version printed %q but `version` printed %q; they must agree", flag, sub)
+	}
+}
