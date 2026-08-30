@@ -4,6 +4,15 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- The `workspace_root` argument now says plainly that the caller should pass a
+  root it can read back: every result is returned as a path under that root, so
+  a workspace the caller cannot open leaves it holding a path to nothing. Text
+  only — the behaviour is unchanged.
+
 ## [0.4.1] - 2026-07-26
 
 ### Fixed

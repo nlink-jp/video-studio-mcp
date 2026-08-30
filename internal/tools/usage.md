@@ -25,9 +25,11 @@ output/            rendered mp4 + tmp    (server-written)
 - `workspace_root` (optional on the `master` tool): an **absolute path to a
   directory you prepared** — create it with your own file tools wherever you
   are allowed to write (e.g. inside the project directory), place the images,
-  audio, and manifest under it, then pass the same value on the call. Omit it
-  to use the server's default root (`~/.video-studio`), which requires the
-  server and you to share an unrestricted filesystem view.
+  audio, and manifest under it, then pass the same value on the call. It has
+  to be a root you can **write to and read back**: you place the inputs there
+  yourself, and the finished MP4 comes back as a path under it. Omit it to use
+  the server's default root (`~/.video-studio`), which requires the server and
+  you to share an unrestricted filesystem view.
 - Image/audio paths in the manifest are **relative to the workspace root**.
 - The server never reads or writes outside the workspace (kernel-enforced;
   symlinks inside the workspace that point outside fail with
