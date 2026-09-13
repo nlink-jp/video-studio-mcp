@@ -4,6 +4,21 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.5.2] - 2026-09-14
+
+### Fixed
+
+- **The initialize `instructions` field never mentioned `work_dir`.** It is the
+  first thing the model reads about this server — before any tool list — and it
+  still described "a workspace directory you prepare" while every tool required
+  an argument it did not name. It now states the contract: `work_dir` is the
+  absolute path of a directory you can read back, required, with no default.
+
+### Added
+
+- `TestInstructionsNameTheWorkDirContract` — the schema and description tests
+  walked `tools/list`; nothing walked what `initialize` returns (ADR-0008).
+
 ## [0.5.1] - 2026-09-13
 
 ### Fixed
