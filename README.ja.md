@@ -69,7 +69,7 @@ dist/video-studio-mcp doctor
 
 ## ワークスペースモデル
 
-1ワークスペース = 1デッキ: `<workspace_root>/<workspace_id>/`
+1ワークスペース = 1デッキ: `<work_dir>/<workspace_id>/`
 
 ```
 <manifest>.jsonl   ページマニフェスト   （あなたが書く）
@@ -78,7 +78,7 @@ audio/…            ページ音声           （あなたが置く）
 output/            出力mp4 + tmp        （サーバーが書く）
 ```
 
-`workspace_root` はあなたが用意した絶対パス（自前のファイルツールでディレクトリを
+`work_dir` はあなたが用意した絶対パス（自前のファイルツールでディレクトリを
 作り素材を配置）で、`master` 呼び出し時に渡す。省略時はサーバー既定
 （`~/.video-studio`）。マニフェスト内の素材パスはワークスペースルート相対。
 サーバーはワークスペース外を読み書きしない（`os.Root` によるカーネル強制。外部を
@@ -89,7 +89,7 @@ output/            出力mp4 + tmp        （サーバーが書く）
 | ツール | 目的 |
 |------|---------|
 | `get_usage` | 操作マニュアル（ワークスペースモデル・マニフェストスキーマ・リカバリ表）を返す。レンダリング前に一度呼ぶ。 |
-| `master` | ページマニフェストから MP4 を1本生成。引数: `workspace_id`, `manifest_path`, 任意 `workspace_root`, `output_name`, `chapters`（既定 true）, `captions` / `soft_captions`（既定 false）, `width`/`height`/`fps`（キャンバス上書き）, `fade_seconds`（既定 0.5）, `keep_intermediates`（既定 false）, `async`（既定 false）。 |
+| `master` | ページマニフェストから MP4 を1本生成。引数: `workspace_id`, `manifest_path`, 任意 `work_dir`, `output_name`, `chapters`（既定 true）, `captions` / `soft_captions`（既定 false）, `width`/`height`/`fps`（キャンバス上書き）, `fade_seconds`（既定 0.5）, `keep_intermediates`（既定 false）, `async`（既定 false）。 |
 | `check_job` | 非同期レンダの進捗を取得: `state`・ページ進捗、`done` 時は `master` の同期結果と同じペイロード。 |
 
 ### 出力サイズ / アスペクト

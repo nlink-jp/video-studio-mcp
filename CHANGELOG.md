@@ -4,6 +4,28 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- **Breaking: `workspace_root` is now `work_dir`, and `master` requires it.** It
+  means the absolute path of a directory the caller can read back; the workspace
+  is `<work_dir>/<workspace_id>/`, and it is the same directory the upstream
+  media servers wrote into. A call still sending `workspace_root` (or
+  `workspaceRoot` / `workspace_dir`) is refused with `work_dir_required` naming
+  the replacement. See [ADR-0008](docs/en/adr/0008-work-dir-contract.md);
+  organization ADR-021.
+- **Breaking: the `~/.video-studio` default root is gone.** Omitting the argument
+  used to write there, which no calling agent can open.
+- A runtime may supply the directory instead of the model: the server reads
+  `_meta["jp.nlink/work_dir"]` when the argument is absent. The argument wins.
+
+### Added
+
+- `work_dir_required`, `work_dir_invalid`, `work_dir_not_found`,
+  `work_dir_not_writable`, `work_dir_denied` — five codes that say which part of
+  the contract failed.
+
 ## [0.4.2] - 2026-08-31
 
 ### Changed

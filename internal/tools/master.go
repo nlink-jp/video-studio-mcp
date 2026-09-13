@@ -22,10 +22,10 @@ func registerMaster(srv *mcpserver.Server, d *Deps) {
 			"referenced image or audio file is missing from the workspace, or invalid_manifest if the manifest is malformed.",
 		InputSchema: json.RawMessage(`{
   "type": "object",
-  "required": ["workspace_id", "manifest_path"],
+  "required": ["work_dir", "workspace_id", "manifest_path"],
   "properties": {
     "workspace_id": {"type": "string", "description": "One deck per workspace; [a-zA-Z0-9_-]{1,64}"},
-    "workspace_root": {"type": "string", "description": "Absolute path to a workspace root you prepared and can read back. Pass your own session or working directory when you have one: results come back as paths, so a workspace you cannot open leaves you holding a path to nothing. Omitting it uses the server default (~/.video-studio), which is only useful if that is readable to you."},
+    "work_dir": {"type": "string", "description": "Absolute path to a directory you can read back \u2014 your session or working directory. The workspace is <work_dir>/<workspace_id>/ and the rendered video lands under it, so a directory you cannot open leaves you holding a path to nothing. It must already exist, and nothing here expands ~ or resolves a relative path. Pass the same work_dir the images and audio were produced under."},
     "manifest_path": {"type": "string", "description": "Page manifest JSONL path relative to the workspace root"},
     "output_name": {"type": "string", "description": "Output basename without extension (default: manifest file name)"},
     "chapters": {"type": "boolean", "description": "Emit one per-page chapter marker in the MP4 (default true); page title comes from the manifest \"title\" field, else \"Page N\""},
@@ -43,7 +43,7 @@ func registerMaster(srv *mcpserver.Server, d *Deps) {
 	}, func(ctx context.Context, args json.RawMessage) (any, error) {
 		in := struct {
 			WorkspaceID       string   `json:"workspace_id"`
-			WorkspaceRoot     string   `json:"workspace_root"`
+			WorkDir           string   `json:"work_dir"`
 			ManifestPath      string   `json:"manifest_path"`
 			OutputName        string   `json:"output_name"`
 			Chapters          *bool    `json:"chapters"`
@@ -95,7 +95,11 @@ func registerMaster(srv *mcpserver.Server, d *Deps) {
 			return nil, toolerr.Newf(toolerr.CodeInvalidArguments, "output_name must be a plain file name, got %q", in.OutputName)
 		}
 
-		ws, err := d.WS.EnsureIn(in.WorkspaceRoot, in.WorkspaceID)
+		workDir, err := d.WorkDir.Resolve(ctx, in.WorkDir)
+		if err != nil {
+			return nil, err
+		}
+		ws, err := d.WS.EnsureUnder(workDir, in.WorkspaceID)
 		if err != nil {
 			return nil, err
 		}

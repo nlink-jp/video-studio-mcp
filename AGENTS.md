@@ -35,7 +35,7 @@ Never `go build` directly — always `make build` (outputs to `dist/`).
   `[video]` = canvas/fps/crf/preset/pix_fmt/audio/background.
 - `internal/workspace/` — one deck = one workspace; ALL server I/O goes through
   `os.Root`; `ResolveInside` + `VerifyRegular` block path traversal / symlink
-  escape; the agent prepares the workplace (`workspace_root`).
+  escape; the agent prepares the workplace (`work_dir`).
 - `internal/manifest/` — page manifest JSONL parser (`Page`); strict decode,
   per-line errors collected (max 20).
 - `internal/master/` — the render pipeline: pure ffmpeg/ffprobe arg builders

@@ -57,7 +57,7 @@ uniformity, which is exactly what step 4 guarantees.
 
 One workspace = one deck under `<root>/<id>/`. The root is either the server
 default (`~/.video-studio`) or an **agent-prepared** absolute path passed as
-`workspace_root`. Because agent-prepared roots are agent-writable, every
+`work_dir`. Because agent-prepared roots are agent-writable, every
 server-side file operation goes through `os.Root`, so a symlink planted inside
 the workspace cannot make the server read or write outside it. ffmpeg cannot
 inherit `os.Root`, so inputs are re-verified with Lstat immediately before the
@@ -80,7 +80,7 @@ Tool errors are `toolerr.Error{code, message, details}`. `errors.Is` matches by
   output file for ffmpeg.
 - **Pure-function** — arg builders and the manifest parser are tested directly.
 - **In-process tool tests** — `mcpserver.Server.Call` invokes a tool by name,
-  so `tools` tests exercise the real handler path (including workspace_root and
+  so `tools` tests exercise the real handler path (including work_dir and
   symlink rejection) without stdio framing.
 - **Real ffmpeg** — validated manually on darwin (differently-sized slides
   letter/pillar-boxed onto 1920×1080; 1s + 2s audio → ~3s MP4).

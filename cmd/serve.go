@@ -49,7 +49,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 	srv.SetInstructions(tools.Instructions)
 	tools.Register(srv, &tools.Deps{
 		Cfg:    cfg,
-		WS:     workspace.NewManager(cfg.Workspace.Dir),
+		WS:     workspace.NewManager(),
 		Runner: master.ExecRunner{},
 		JobCtx: ctx, // async renders outlive the tool call but stop on shutdown
 		Logger: logger,

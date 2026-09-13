@@ -47,7 +47,7 @@ func newHarness(t *testing.T) *harness {
 	cfg.Video.FFmpegPath = "/bin/ls"
 	cfg.Video.FFprobePath = "/bin/ls"
 	cfg.Workspace.Dir = filepath.Join(t.TempDir(), "default")
-	wsm := workspace.NewManager(cfg.Workspace.Dir)
+	wsm := workspace.NewManager()
 	srv := mcpserver.New("video-studio-mcp", "test",
 		transport.NewStdioTransport(strings.NewReader(""), io.Discard), nil)
 	Register(srv, &Deps{Cfg: cfg, WS: wsm, Runner: fakeRunner{}})
@@ -66,7 +66,12 @@ func (h *harness) call(name string, args map[string]any) (any, error) {
 // and returns its root.
 func seedDeck(t *testing.T, wsID string) string {
 	t.Helper()
-	root := t.TempDir()
+	// The resolved spelling: the server validates the work directory down to
+	// it and builds every path it returns from that.
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 	base := filepath.Join(root, wsID)
 	for _, d := range []string{"images", "audio"} {
 		if err := os.MkdirAll(filepath.Join(base, d), 0o755); err != nil {
@@ -90,16 +95,16 @@ func writeFile(t *testing.T, path, content string) {
 	}
 }
 
-// TestMasterWorkspaceRoot pins the core contract: the server renders in the
+// TestMasterWorkDir pins the core contract: the server renders in the
 // workplace the agent prepared, and leaves the default root untouched.
-func TestMasterWorkspaceRoot(t *testing.T) {
+func TestMasterWorkDir(t *testing.T) {
 	h := newHarness(t)
 	root := seedDeck(t, "deck")
 
 	out, err := h.call("master", map[string]any{
-		"workspace_id":   "deck",
-		"workspace_root": root,
-		"manifest_path":  "deck.jsonl",
+		"workspace_id":  "deck",
+		"work_dir":      root,
+		"manifest_path": "deck.jsonl",
 	})
 	if err != nil {
 		t.Fatalf("master: %v", err)
@@ -113,14 +118,10 @@ func TestMasterWorkspaceRoot(t *testing.T) {
 		t.Errorf("chapters (default on): %d", res.Chapters)
 	}
 	if !strings.HasPrefix(res.MasterPath, root) || filepath.Base(res.MasterPath) != "deck.mp4" {
-		t.Errorf("master path %q not under workspace_root", res.MasterPath)
+		t.Errorf("master path %q not under work_dir", res.MasterPath)
 	}
 	if _, err := os.Stat(res.MasterPath); err != nil {
 		t.Errorf("output not written: %v", err)
-	}
-	// The server-default root must stay untouched.
-	if _, err := os.Stat(filepath.Join(h.def.Root(), "deck")); !os.IsNotExist(err) {
-		t.Errorf("default root should be untouched, stat err=%v", err)
 	}
 }
 
@@ -132,9 +133,9 @@ func TestMasterManifestIncomplete(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err := h.call("master", map[string]any{
-		"workspace_id":   "deck",
-		"workspace_root": root,
-		"manifest_path":  "deck.jsonl",
+		"workspace_id":  "deck",
+		"work_dir":      root,
+		"manifest_path": "deck.jsonl",
 	})
 	var te *toolerr.Error
 	if !errors.As(err, &te) || te.Code != toolerr.CodeManifestIncomplete {
@@ -156,9 +157,9 @@ func TestMasterSymlinkRejected(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err := h.call("master", map[string]any{
-		"workspace_id":   "deck",
-		"workspace_root": root,
-		"manifest_path":  "deck.jsonl",
+		"workspace_id":  "deck",
+		"work_dir":      root,
+		"manifest_path": "deck.jsonl",
 	})
 	if !errors.Is(err, toolerr.New(toolerr.CodePathNotAllowed, "")) {
 		t.Fatalf("want path_not_allowed, got %v", err)
@@ -170,9 +171,9 @@ func TestMasterInvalidManifest(t *testing.T) {
 	root := seedDeck(t, "deck")
 	writeFile(t, filepath.Join(root, "deck", "bad.jsonl"), `{"image":"a.png","audio":"a.wav","bogus":1}`)
 	_, err := h.call("master", map[string]any{
-		"workspace_id":   "deck",
-		"workspace_root": root,
-		"manifest_path":  "bad.jsonl",
+		"workspace_id":  "deck",
+		"work_dir":      root,
+		"manifest_path": "bad.jsonl",
 	})
 	if !errors.Is(err, toolerr.New(toolerr.CodeInvalidManifest, "")) {
 		t.Fatalf("want invalid_manifest, got %v", err)
@@ -193,10 +194,10 @@ func TestMasterAsync(t *testing.T) {
 	root := seedDeck(t, "deck")
 
 	out, err := h.call("master", map[string]any{
-		"workspace_id":   "deck",
-		"workspace_root": root,
-		"manifest_path":  "deck.jsonl",
-		"async":          true,
+		"workspace_id":  "deck",
+		"work_dir":      root,
+		"manifest_path": "deck.jsonl",
+		"async":         true,
 	})
 	if err != nil {
 		t.Fatalf("master async: %v", err)
@@ -247,12 +248,12 @@ func TestMasterCanvasOverride(t *testing.T) {
 	h := newHarness(t)
 	root := seedDeck(t, "deck")
 	out, err := h.call("master", map[string]any{
-		"workspace_id":   "deck",
-		"workspace_root": root,
-		"manifest_path":  "deck.jsonl",
-		"width":          1080,
-		"height":         1920,
-		"fps":            24,
+		"workspace_id":  "deck",
+		"work_dir":      root,
+		"manifest_path": "deck.jsonl",
+		"width":         1080,
+		"height":        1920,
+		"fps":           24,
 	})
 	if err != nil {
 		t.Fatalf("master: %v", err)
@@ -267,10 +268,10 @@ func TestMasterInvalidOverride(t *testing.T) {
 	h := newHarness(t)
 	root := seedDeck(t, "deck")
 	_, err := h.call("master", map[string]any{
-		"workspace_id":   "deck",
-		"workspace_root": root,
-		"manifest_path":  "deck.jsonl",
-		"width":          1081, // odd → rejected before rendering
+		"workspace_id":  "deck",
+		"work_dir":      root,
+		"manifest_path": "deck.jsonl",
+		"width":         1081, // odd → rejected before rendering
 	})
 	var te *toolerr.Error
 	if !errors.As(err, &te) || te.Code != toolerr.CodeInvalidArguments {
@@ -286,10 +287,10 @@ func TestMasterSoftCaptions(t *testing.T) {
 	writeFile(t, filepath.Join(root, "deck", "deck.jsonl"), man)
 
 	out, err := h.call("master", map[string]any{
-		"workspace_id":   "deck",
-		"workspace_root": root,
-		"manifest_path":  "deck.jsonl",
-		"soft_captions":  true,
+		"workspace_id":  "deck",
+		"work_dir":      root,
+		"manifest_path": "deck.jsonl",
+		"soft_captions": true,
 	})
 	if err != nil {
 		t.Fatalf("master: %v", err)

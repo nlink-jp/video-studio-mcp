@@ -65,7 +65,7 @@ func newMaster(r Runner) *Master {
 // workspace and returns it.
 func seed(t *testing.T, pages []manifest.Page) *workspace.Workspace {
 	t.Helper()
-	ws, err := workspace.NewManager(t.TempDir()).Ensure("deck1")
+	ws, err := workspace.NewManager().EnsureUnder(t.TempDir(), "deck1")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -71,7 +71,7 @@ filesystem where the agent places the images, audio, and manifest).
 
 ## Workspace model
 
-One workspace = one deck: `<workspace_root>/<workspace_id>/`
+One workspace = one deck: `<work_dir>/<workspace_id>/`
 
 ```
 <manifest>.jsonl   page manifest        (you write this)
@@ -80,7 +80,7 @@ audio/…            page audio files     (you place these)
 output/            rendered mp4 + tmp    (server-written)
 ```
 
-`workspace_root` is an absolute path to a directory you prepared (create it and
+`work_dir` is an absolute path to a directory you prepared (create it and
 drop the assets in with your own file tools), passed on the `master` call. Omit
 it to use the server default (`~/.video-studio`). Asset paths in the manifest
 are relative to the workspace root. The server never reads or writes outside
@@ -92,7 +92,7 @@ rejected with `path_not_allowed`).
 | Tool | Purpose |
 |------|---------|
 | `get_usage` | Return the operating manual (workspace model, manifest schema, recovery table). Call once before rendering. |
-| `master` | Build one MP4 from a page manifest. Args: `workspace_id`, `manifest_path`, optional `workspace_root`, `output_name`, `chapters` (default true), `captions` / `soft_captions` (default false), `width`/`height`/`fps` (canvas override), `fade_seconds` (default 0.5), `keep_intermediates` (default false), `async` (default false). |
+| `master` | Build one MP4 from a page manifest. Args: `workspace_id`, `manifest_path`, optional `work_dir`, `output_name`, `chapters` (default true), `captions` / `soft_captions` (default false), `width`/`height`/`fps` (canvas override), `fade_seconds` (default 0.5), `keep_intermediates` (default false), `async` (default false). |
 | `check_job` | Poll an async render: `state`, page progress, and — when `done` — the same result `master` returns synchronously. |
 
 ### Output size / aspect

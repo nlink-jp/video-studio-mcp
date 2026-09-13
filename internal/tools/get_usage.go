@@ -29,7 +29,7 @@ const Instructions = "video-studio-mcp assembles a narrated presentation video (
 func registerGetUsage(srv *mcpserver.Server, d *Deps) {
 	srv.RegisterTool(mcpserver.Tool{
 		Name: "get_usage",
-		Description: "Return this server's operating manual (markdown): workspace model and workspace_root, " +
+		Description: "Return this server's operating manual (markdown): workspace model and work_dir, " +
 			"the page manifest JSONL schema, the render flow, and the error recovery table. " +
 			"Call it once before your first render.",
 		InputSchema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),

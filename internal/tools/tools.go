@@ -16,6 +16,7 @@ import (
 	"github.com/nlink-jp/video-studio-mcp/internal/master"
 	"github.com/nlink-jp/video-studio-mcp/internal/mcpserver"
 	"github.com/nlink-jp/video-studio-mcp/internal/toolerr"
+	"github.com/nlink-jp/video-studio-mcp/internal/workdir"
 	"github.com/nlink-jp/video-studio-mcp/internal/workspace"
 )
 
@@ -23,6 +24,10 @@ import (
 type Deps struct {
 	Cfg *config.Config
 	WS  *workspace.Manager
+	// WorkDir resolves and validates the per-call work directory: the
+	// argument, then the request's _meta, then an error. The zero value
+	// works (organization ADR-021).
+	WorkDir workdir.Resolver
 	// Runner executes ffmpeg/ffprobe for the master tool (fake in tests).
 	Runner master.Runner
 	// Jobs tracks background (async) renders.
