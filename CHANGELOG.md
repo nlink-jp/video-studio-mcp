@@ -17,6 +17,12 @@ All notable changes to this project are documented here. The format follows
 - README and README.ja still told the caller to omit `work_dir` to get the
   server default. It is required and has no default.
 
+### Added
+
+- A contract test walking every registered tool: no retired name in a schema or
+  a description, and `work_dir` required wherever it is declared. ADR-0008
+  asked for this test and the release shipped without it.
+
 ## [0.5.0] - 2026-09-13
 
 ### Changed
