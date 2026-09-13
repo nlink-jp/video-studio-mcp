@@ -4,6 +4,17 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.5.3] - 2026-09-14
+
+### Added
+
+- `TestEveryRequiredNameIsDeclared` — a schema that lists a name in `required`
+  without declaring it in `properties` makes a strict client refuse the whole
+  tool list (Vertex AI: "schema at top-level requires unspecified property").
+  data-toolbox-mcp shipped exactly that and broke a session outright; the
+  existing contract test checked declared ⇒ required only, so the fleet is
+  pinned in both directions now.
+
 ## [0.5.2] - 2026-09-14
 
 ### Fixed
