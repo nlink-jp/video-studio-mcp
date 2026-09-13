@@ -15,21 +15,15 @@ import (
 
 // Config is the root configuration.
 type Config struct {
-	Server    ServerConfig    `toml:"server"`
-	Workspace WorkspaceConfig `toml:"workspace"`
-	Video     VideoConfig     `toml:"video"`
-	Caption   CaptionConfig   `toml:"caption"`
+	Server  ServerConfig  `toml:"server"`
+	Video   VideoConfig   `toml:"video"`
+	Caption CaptionConfig `toml:"caption"`
 }
 
 // ServerConfig controls logging.
 type ServerConfig struct {
 	LogLevel string `toml:"log_level"` // debug|info|warn|error
 	LogFile  string `toml:"log_file"`  // empty = stderr only
-}
-
-// WorkspaceConfig controls where the server's default workspaces live.
-type WorkspaceConfig struct {
-	Dir string `toml:"workspace_dir"`
 }
 
 // VideoConfig controls the ffmpeg render pipeline.
@@ -77,9 +71,6 @@ func Default() *Config {
 		Server: ServerConfig{
 			LogLevel: "info",
 		},
-		Workspace: WorkspaceConfig{
-			Dir: ExpandHome("~/.video-studio"),
-		},
 		Video: VideoConfig{
 			FFmpegPath:      "ffmpeg",
 			FFprobePath:     "ffprobe",
@@ -115,12 +106,21 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("load %s: %w", path, err)
 	}
 	if undecoded := meta.Undecoded(); len(undecoded) > 0 {
+		// A key this server removed deserves its name and its reason, not the
+		// same "unknown key" a typo gets: the operator set it deliberately and
+		// has to be told what replaced it (ADR-0008).
+		for _, k := range undecoded {
+			if k.String() == "workspace.workspace_dir" {
+				return nil, fmt.Errorf("load %s: [workspace] workspace_dir was removed in ADR-0008: "+
+					"the workspace is <work_dir>/<workspace_id>/ and work_dir is named by the caller on "+
+					"every call, so the server owns no root. Delete the key and the [workspace] section", path)
+			}
+		}
 		return nil, fmt.Errorf("load %s: unknown config keys: %v", path, undecoded)
 	}
 	if err := cfg.validate(); err != nil {
 		return nil, fmt.Errorf("load %s: %w", path, err)
 	}
-	cfg.Workspace.Dir = ExpandHome(cfg.Workspace.Dir)
 	cfg.Server.LogFile = ExpandHome(cfg.Server.LogFile)
 	cfg.Video.FFmpegPath = ExpandHome(cfg.Video.FFmpegPath)
 	cfg.Video.FFprobePath = ExpandHome(cfg.Video.FFprobePath)

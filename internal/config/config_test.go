@@ -1,6 +1,11 @@
 package config
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
 
 func TestVideoValidate(t *testing.T) {
 	tests := []struct {
@@ -41,5 +46,26 @@ func TestVideoValidate(t *testing.T) {
 func TestDefaultFadeSeconds(t *testing.T) {
 	if got := Default().Video.FadeSeconds; got != 0.5 {
 		t.Errorf("default fade_seconds = %g, want 0.5", got)
+	}
+}
+
+// A key this server removed must be answered by name: the operator set it
+// deliberately, and "unknown config keys" reads like a typo. v0.5.0 removed
+// the default workspace root but left the key decoding into a field nothing
+// used, so a config carrying it loaded and quietly meant nothing.
+func TestRemovedWorkspaceDirIsRejectedByName(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	if err := os.WriteFile(path, []byte("[workspace]\nworkspace_dir = \"~/.video-studio\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := Load(path)
+	if err == nil {
+		t.Fatal("a config carrying workspace_dir must fail to load")
+	}
+	for _, want := range []string{"workspace_dir", "work_dir", "ADR-0008"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not mention %q", err, want)
+		}
 	}
 }

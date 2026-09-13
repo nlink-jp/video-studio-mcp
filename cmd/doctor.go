@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 	"io"
-	"os"
 	"os/exec"
 
 	"github.com/spf13/cobra"
@@ -48,13 +47,6 @@ func runDoctorChecks(out io.Writer, cfg *config.Config, usedConfig string) bool 
 		} else {
 			fmt.Fprintf(out, "ok %s: %s\n", tool.name, tool.path)
 		}
-	}
-
-	if err := os.MkdirAll(cfg.Workspace.Dir, 0o755); err != nil {
-		fmt.Fprintf(out, "NG workspace dir: %v\n", err)
-		ok = false
-	} else {
-		fmt.Fprintf(out, "ok workspace dir: %s\n", cfg.Workspace.Dir)
 	}
 
 	return ok

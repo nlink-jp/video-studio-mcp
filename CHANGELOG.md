@@ -4,6 +4,19 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.5.1] - 2026-09-13
+
+### Fixed
+
+- **The `~/.video-studio` root was announced as gone in 0.5.0 but was still
+  half there**: `[workspace] workspace_dir` still decoded into a field no tool
+  read, `doctor` still created the directory, the startup log still reported
+  it, and `config.example.toml` still offered it as "the default root". The key
+  is gone, and a config still carrying it now fails to load naming `work_dir`
+  as the replacement.
+- README and README.ja still told the caller to omit `work_dir` to get the
+  server default. It is required and has no default.
+
 ## [0.5.0] - 2026-09-13
 
 ### Changed

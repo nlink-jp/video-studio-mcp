@@ -81,9 +81,10 @@ output/            rendered mp4 + tmp    (server-written)
 ```
 
 `work_dir` is an absolute path to a directory you prepared (create it and
-drop the assets in with your own file tools), passed on the `master` call. Omit
-it to use the server default (`~/.video-studio`). Asset paths in the manifest
-are relative to the workspace root. The server never reads or writes outside
+drop the assets in with your own file tools), passed on the `master` call. It
+is required and has no default: a directory the server picked is one you may
+not be able to open, which would make the returned path useless. Asset paths in
+the manifest are relative to the workspace root. The server never reads or writes outside
 the workspace (kernel-enforced via `os.Root`; symlinks pointing out are
 rejected with `path_not_allowed`).
 

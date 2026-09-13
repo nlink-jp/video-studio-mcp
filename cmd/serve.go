@@ -55,7 +55,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 		Logger: logger,
 	})
 
-	logger.Info("serving MCP over stdio", "version", Version, "workspace_dir", cfg.Workspace.Dir)
+	logger.Info("serving MCP over stdio", "version", Version)
 	if err := srv.Serve(ctx); err != nil {
 		if errors.Is(err, context.Canceled) {
 			return nil
