@@ -1,0 +1,42 @@
+package workspace
+
+import (
+	"errors"
+	"io/fs"
+	"strings"
+	"testing"
+)
+
+// TestAMissingFileNamesThePathItLookedFor: a workspace-relative name that is
+// not there has to come back with the absolute path that was looked at. The
+// workspace is a level below the work directory the caller named, which is not
+// where an agent naturally puts a file; "openat x: no such file or directory"
+// sent a real agent off inventing a directory (voice-scribe, 2026-09-14). The
+// scribes and image-forge were fixed then; this server was not.
+func TestAMissingFileNamesThePathItLookedFor(t *testing.T) {
+	workDir := t.TempDir()
+	var m Manager
+	w, err := m.EnsureUnder(workDir, "deck")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, call := range map[string]func() error{
+		"ReadFile":      func() error { _, err := w.ReadFile("manifest.json"); return err },
+		"Stat":          func() error { _, err := w.Stat("manifest.json"); return err },
+		"VerifyRegular": func() error { return w.VerifyRegular("manifest.json") },
+	} {
+		err := call()
+		if err == nil {
+			t.Fatalf("%s: a file that is not there was found", name)
+		}
+		if !strings.Contains(err.Error(), w.Path("manifest.json")) {
+			t.Errorf("%s: the error does not name the absolute path it looked for: %q", name, err)
+		}
+		if !strings.Contains(err.Error(), "<work_dir>/<workspace_id>/") {
+			t.Errorf("%s: the error does not say what the name is relative to: %q", name, err)
+		}
+		if !errors.Is(err, fs.ErrNotExist) {
+			t.Errorf("%s: the error stopped being fs.ErrNotExist: %v", name, err)
+		}
+	}
+}

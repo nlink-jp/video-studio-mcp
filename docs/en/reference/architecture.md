@@ -55,9 +55,9 @@ uniformity, which is exactly what step 4 guarantees.
 
 ## Workspace containment
 
-One workspace = one deck under `<root>/<id>/`. The root is either the server
-default (`~/.video-studio`) or an **agent-prepared** absolute path passed as
-`work_dir`. Because agent-prepared roots are agent-writable, every
+One workspace = one deck under `<work_dir>/<id>/`. The root is the
+**agent-prepared** absolute path every call passes as `work_dir`; the server
+has no default of its own (organization ADR-021). Because that root is agent-writable, every
 server-side file operation goes through `os.Root`, so a symlink planted inside
 the workspace cannot make the server read or write outside it. ffmpeg cannot
 inherit `os.Root`, so inputs are re-verified with Lstat immediately before the

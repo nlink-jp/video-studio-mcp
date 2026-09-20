@@ -4,6 +4,26 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- **A file that is not in the workspace is reported with the path that was
+  looked at.** The error used to read `openat narration.wav: no such file or
+  directory` — a name relative to a directory the message did not mention. The
+  workspace is a level below the `work_dir` the caller names, which is not where
+  an agent naturally puts a file; the same bare sentence in voice-scribe sent a
+  real agent off inventing a directory (2026-09-14). That fix reached the
+  scribes and image-forge and not this server, which shares a workspace with
+  voice-studio-mcp. Every workspace file operation now names the absolute path and says
+  what the name is relative to.
+
+### Documentation
+
+- The architecture reference (en and ja) and a package comment still described a
+  server default, `~/.video-studio`; there has been none since the work_dir
+  contract.
+
 ## [0.5.3] - 2026-09-14
 
 ### Added

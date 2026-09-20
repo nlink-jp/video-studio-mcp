@@ -9,16 +9,17 @@
 //	├── <images/audio>     agent-placed assets (any relative layout)
 //	└── output/            rendered video + tmp segments (server-written)
 //
-// The workspace root is either the server-configured default (~/.video-studio)
-// or an agent-prepared directory passed per call as work_dir ("the
-// server works in the workplace the agent prepared"). Because agent-prepared
-// roots are agent-writable, every server I/O inside a workspace goes through
+// The workspace root is the agent-prepared directory every call passes as
+// work_dir ("the server works in the workplace the agent prepared"); the server
+// keeps no default of its own (organization ADR-021). Because that root is
+// agent-writable, every server I/O inside a workspace goes through
 // os.Root so symlinks planted in the workspace cannot make the server read or
 // write outside it (kernel-enforced containment).
 package workspace
 
 import (
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -72,9 +73,9 @@ func (w *Workspace) openRoot() (*os.Root, error) {
 	return r, nil
 }
 
-// mapRootErr converts os.Root escape errors into path_not_allowed so agents
+// rootErr converts os.Root escape errors into path_not_allowed so agents
 // get the same stable code as the lexical pre-check.
-func mapRootErr(op, rel string, err error) error {
+func (w *Workspace) rootErr(op, rel string, err error) error {
 	if err == nil {
 		return nil
 	}
@@ -82,6 +83,19 @@ func mapRootErr(op, rel string, err error) error {
 	if errors.As(err, &pe) && strings.Contains(pe.Err.Error(), "escapes") {
 		return toolerr.Newf(toolerr.CodePathNotAllowed,
 			"%s %q: path escapes the workspace root (symlink?)", op, rel)
+	}
+	// Name the path that was looked at. A root-relative error says only
+	// "openat narration.wav: no such file or directory", and the workspace is a
+	// level below the work directory the caller named — not where an agent
+	// naturally puts a file. The scribes and image-forge shipped the same bare
+	// sentence, and a real agent (2026-09-14) answered it by inventing a
+	// directory and spending four rounds recovering; the fix reached them and
+	// not the two servers that share a workspace with each other. It stays an
+	// fs.ErrNotExist for errors.Is.
+	if errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("%s %q: not found — looked for %s. Paths are relative to the workspace, "+
+			"which is <work_dir>/<workspace_id>/: write the file there with your own file tools "+
+			"and pass the name it has inside the workspace: %w", op, rel, w.Path(rel), fs.ErrNotExist)
 	}
 	return err
 }
@@ -94,7 +108,7 @@ func (w *Workspace) ReadFile(rel string) ([]byte, error) {
 	}
 	defer r.Close()
 	b, err := r.ReadFile(rel)
-	return b, mapRootErr("read", rel, err)
+	return b, w.rootErr("read", rel, err)
 }
 
 // WriteFileAtomic writes a workspace-relative file via temp+rename, fully
@@ -113,15 +127,15 @@ func (w *Workspace) WriteFileAtomic(rel string, data []byte) error {
 				return toolerr.Newf(toolerr.CodePathNotAllowed,
 					"mkdir %q: a path component is not a real directory (symlink?)", dir)
 			}
-			return mapRootErr("mkdir", dir, err)
+			return w.rootErr("mkdir", dir, err)
 		}
 	}
 	tmp := rel + ".tmp"
 	if err := r.WriteFile(tmp, data, 0o644); err != nil {
-		return mapRootErr("write", tmp, err)
+		return w.rootErr("write", tmp, err)
 	}
 	if err := r.Rename(tmp, rel); err != nil {
-		return mapRootErr("rename", rel, err)
+		return w.rootErr("rename", rel, err)
 	}
 	return nil
 }
@@ -134,7 +148,7 @@ func (w *Workspace) Stat(rel string) (fs.FileInfo, error) {
 	}
 	defer r.Close()
 	fi, err := r.Stat(rel)
-	return fi, mapRootErr("stat", rel, err)
+	return fi, w.rootErr("stat", rel, err)
 }
 
 // MkdirAll creates a workspace-relative directory tree.
@@ -144,7 +158,7 @@ func (w *Workspace) MkdirAll(rel string) error {
 		return err
 	}
 	defer r.Close()
-	return mapRootErr("mkdir", rel, r.MkdirAll(rel, 0o755))
+	return w.rootErr("mkdir", rel, r.MkdirAll(rel, 0o755))
 }
 
 // RemoveAll removes a workspace-relative tree.
@@ -154,7 +168,7 @@ func (w *Workspace) RemoveAll(rel string) error {
 		return err
 	}
 	defer r.Close()
-	return mapRootErr("remove", rel, r.RemoveAll(rel))
+	return w.rootErr("remove", rel, r.RemoveAll(rel))
 }
 
 // VerifyRegular confirms rel is a regular file (not a symlink) inside the
@@ -173,7 +187,7 @@ func (w *Workspace) VerifyRegular(rel string) error {
 	defer r.Close()
 	fi, err := r.Lstat(rel)
 	if err != nil {
-		return mapRootErr("lstat", rel, err)
+		return w.rootErr("lstat", rel, err)
 	}
 	if !fi.Mode().IsRegular() {
 		return toolerr.Newf(toolerr.CodePathNotAllowed,
