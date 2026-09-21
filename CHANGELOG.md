@@ -4,6 +4,26 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Security
+
+- **A symlink planted where the workspace goes no longer redirects the whole
+  render outside `work_dir`.** The server opens each workspace as a containment
+  root, but a root resolves its own path normally: if something had already put
+  a symlink at `<work_dir>/<workspace_id>` — another tool with write access to
+  `work_dir`, or code in a sandbox — every read and write, including the
+  finished MP4, landed in the link's target while every result reported success
+  and printed a path under `work_dir`. The workspace directory is now created
+  through a root on `work_dir` and then checked by real path; a workspace that
+  turns out to be a link is refused, naming the id and what it resolved to.
+- **A symlink at the output path no longer gets its target overwritten by the
+  render.** ffmpeg opens the final MP4 itself and cannot inherit the containment
+  root, so a link left at `output/<name>.mp4` was followed and whatever it
+  pointed at was overwritten with the video. The path is now cleared through the
+  workspace root before ffmpeg is spawned, which removes the link and not its
+  target, so the render always creates the file fresh.
+
 ## [0.5.4] - 2026-09-21
 
 ### Fixed

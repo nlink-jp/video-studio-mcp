@@ -35,7 +35,9 @@ output/            rendered mp4 + tmp    (server-written)
 - Image/audio paths in the manifest are **relative to the workspace**.
 - The server never reads or writes outside the workspace (kernel-enforced;
   symlinks inside the workspace that point outside fail with
-  `path_not_allowed`).
+  `path_not_allowed`). The workspace directory itself must be a real directory:
+  if `<work_dir>/<workspace_id>` is a symlink, the call is refused with
+  `path_not_allowed` rather than run against the link's target.
 
 ## Render flow
 

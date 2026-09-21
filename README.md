@@ -86,7 +86,10 @@ is required and has no default: a directory the server picked is one you may
 not be able to open, which would make the returned path useless. Asset paths in
 the manifest are relative to the workspace root. The server never reads or writes outside
 the workspace (kernel-enforced via `os.Root`; symlinks pointing out are
-rejected with `path_not_allowed`).
+rejected with `path_not_allowed`). The workspace directory itself is checked
+before any I/O: if `<work_dir>/<id>` is a symlink rather than a real directory,
+the call is refused and names what the id resolved to, instead of running the
+whole render against the link's target.
 
 ## Tools
 

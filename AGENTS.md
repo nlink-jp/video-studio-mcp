@@ -65,6 +65,21 @@ Never `go build` directly — always `make build` (outputs to `dist/`).
   re-verified as real regular files (`VerifyRegular`, Lstat) immediately before
   they are handed to ffmpeg. The remaining verify-to-spawn race is accepted
   under the local single-user threat model.
+- **The workspace base is verified by real path, because the path is handed to
+  ffmpeg, which resolves it outside any root** — `os.Root` contains operations
+  *within* a root but resolves the root path itself normally, so a link planted
+  at `<work_dir>/<id>` would anchor every read and write on its target while
+  reporting success. `makeWorkspaceDir` creates the directory through an
+  `os.Root` on `work_dir` **and** compares `filepath.EvalSymlinks` of the base
+  against `<real work_dir>/<id>`; a mismatch is refused. The comparison is the
+  load-bearing half — the root-based mkdir alone cannot help a path that later
+  leaves the process.
+- **The final MP4 is cleared through the root before the spawn** — ffmpeg opens
+  the output path itself and would follow a symlink planted at
+  `output/<name>.mp4`, overwriting the link's target. `Build` calls
+  `ws.RemoveAll(outRel)` first (a root-based remove unlinks the link, never what
+  it points at) so ffmpeg always creates the file fresh. `output/tmp` was
+  already handled this way; the master was not.
 - **Symlink vs missing** — `VerifyRegular` returns `path_not_allowed` for a
   symlink/non-regular entry (surfaced immediately) but a plain lstat error for a
   missing file (collected → `manifest_incomplete`). Do not collapse the two.

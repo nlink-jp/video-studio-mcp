@@ -245,6 +245,15 @@ func (m *Master) Build(ctx context.Context, ws *workspace.Workspace, manifestSte
 		name = manifestStem
 	}
 	outRel := filepath.Join(workspace.DirOutput, name+".mp4")
+	// ffmpeg cannot inherit os.Root: it opens the output path itself, so a
+	// symlink planted at output/<name>.mp4 would be followed and the link's
+	// target overwritten with the render. Clear the path through the workspace
+	// root first — a root-based remove unlinks the link, never what it points
+	// at — so ffmpeg always creates the file fresh. (The per-page segments
+	// under output/tmp are already cleared the same way in step 3.)
+	if err := ws.RemoveAll(outRel); err != nil {
+		return Result{}, err
+	}
 	report("finalizing", len(items), len(items))
 	if err := m.runFFmpeg(ctx, concatArgs(ws.Path(listRel), metadataPath, subtitlePath, ws.Path(outRel))); err != nil {
 		return Result{}, err

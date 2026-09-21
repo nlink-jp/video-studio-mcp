@@ -14,7 +14,9 @@
 // keeps no default of its own (organization ADR-021). Because that root is
 // agent-writable, every server I/O inside a workspace goes through
 // os.Root so symlinks planted in the workspace cannot make the server read or
-// write outside it (kernel-enforced containment).
+// write outside it (kernel-enforced containment). An os.Root resolves its own
+// path normally, so it cannot vouch for the base directory it is anchored on:
+// the base is additionally verified by real path (see makeWorkspaceDir).
 package workspace
 
 import (
@@ -221,16 +223,49 @@ func (m *Manager) ensureUnder(root, id string) (*Workspace, error) {
 	if err := ValidateID(id); err != nil {
 		return nil, err
 	}
-	base := filepath.Join(root, id)
-	// Mkdir, not MkdirAll: the work directory itself is the caller's and must
-	// already exist, so a missing parent is a caller mistake worth hearing
-	// about rather than a tree to conjure up.
-	if err := os.Mkdir(base, 0o755); err != nil && !errors.Is(err, fs.ErrExist) {
-		return nil, toolerr.Newf(toolerr.CodeWorkspaceFailed, "create workspace dir: %v", err)
+	if err := makeWorkspaceDir(root, id); err != nil {
+		return nil, err
 	}
-	w := &Workspace{ID: id, BaseDir: base}
+	w := &Workspace{ID: id, BaseDir: filepath.Join(root, id)}
 	if err := w.MkdirAll(DirOutput); err != nil {
 		return nil, err
 	}
 	return w, nil
+}
+
+// makeWorkspaceDir creates <workDir>/<id> and refuses a workspace whose
+// directory is not really there. work_dir is the one path the caller vouched
+// for; <id> beneath it may be a link, planted by any other tool with write
+// access to work_dir. os.Root contains the operations performed *within* a
+// root but resolves the root path itself normally, so a link at <id> would
+// anchor every later read and write on the link's target while every result
+// still reported success. The directory is made through an os.Root on work_dir,
+// which refuses a path that leaves it, and what was made is then compared with
+// what was asked for by real path, because the workspace path is later handed
+// to ffmpeg, which resolves it outside any root.
+func makeWorkspaceDir(workDir, id string) error {
+	root, err := os.OpenRoot(workDir)
+	if err != nil {
+		return toolerr.Newf(toolerr.CodeWorkspaceFailed, "open work_dir: %v", err)
+	}
+	defer func() { _ = root.Close() }()
+	// Mkdir, not MkdirAll: the work directory itself is the caller's and must
+	// already exist, so a missing parent is a caller mistake worth hearing
+	// about rather than a tree to conjure up.
+	if err := root.Mkdir(id, 0o755); err != nil && !errors.Is(err, fs.ErrExist) {
+		return toolerr.Newf(toolerr.CodeWorkspaceFailed, "create workspace dir: %v", err)
+	}
+	realWorkDir, err := filepath.EvalSymlinks(workDir)
+	if err != nil {
+		return toolerr.Newf(toolerr.CodeWorkspaceFailed, "resolve work_dir: %v", err)
+	}
+	got, err := filepath.EvalSymlinks(filepath.Join(workDir, id))
+	if err != nil {
+		return toolerr.Newf(toolerr.CodeWorkspaceFailed, "resolve workspace dir: %v", err)
+	}
+	if got != filepath.Join(realWorkDir, id) {
+		return toolerr.Newf(toolerr.CodePathNotAllowed,
+			"refused: workspace %q is a link to %s, not a directory under work_dir", id, got)
+	}
+	return nil
 }

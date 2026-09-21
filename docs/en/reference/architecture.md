@@ -59,10 +59,16 @@ One workspace = one deck under `<work_dir>/<id>/`. The root is the
 **agent-prepared** absolute path every call passes as `work_dir`; the server
 has no default of its own (organization ADR-021). Because that root is agent-writable, every
 server-side file operation goes through `os.Root`, so a symlink planted inside
-the workspace cannot make the server read or write outside it. ffmpeg cannot
-inherit `os.Root`, so inputs are re-verified with Lstat immediately before the
-spawn; the residual verify-to-spawn race is accepted under the local
-single-user threat model.
+the workspace cannot make the server read or write outside it. A root, however,
+resolves *its own* path normally, so the base directory is not protected by the
+root anchored on it: `makeWorkspaceDir` creates `<id>` through an `os.Root` on
+`work_dir` and then compares the base's real path against `<real work_dir>/<id>`,
+refusing a workspace that turns out to be a link. The comparison is the
+load-bearing half, because the path is handed to ffmpeg, which resolves it
+outside any root. ffmpeg cannot inherit `os.Root`, so inputs are re-verified
+with Lstat immediately before the spawn and the output path is cleared through
+the root so a link left there cannot be followed; the residual
+verify-to-spawn race is accepted under the local single-user threat model.
 
 ## Error model
 
