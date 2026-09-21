@@ -50,6 +50,11 @@ func newHarness(t *testing.T) *harness {
 	srv := mcpserver.New("video-studio-mcp", "test",
 		transport.NewStdioTransport(strings.NewReader(""), io.Discard), nil)
 	Register(srv, &Deps{Cfg: cfg, WS: wsm, Runner: fakeRunner{}})
+	// The floor under every per-tool loop: with no tools registered, each
+	// contract would pass without having examined anything.
+	if len(srv.Tools()) == 0 {
+		t.Fatal("no tools are registered, so every per-tool contract would pass without examining one")
+	}
 	return &harness{t: t, srv: srv, def: wsm}
 }
 

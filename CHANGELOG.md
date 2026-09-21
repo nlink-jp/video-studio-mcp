@@ -16,6 +16,12 @@ All notable changes to this project are documented here. The format follows
   informational `spctl` line may be ignored. Matches the org template
   (CONVENTIONS.md §Code Signing → Verifying a release).
 
+### Tests
+
+- The per-tool contract tests fail when no tool is registered. They loop over
+  the registered tools, and with an empty list every one of them passed without
+  examining anything.
+
 ## [0.5.6] - 2026-09-21
 
 ### Security
