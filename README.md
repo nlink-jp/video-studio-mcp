@@ -91,6 +91,12 @@ before any I/O: if `<work_dir>/<id>` is a symlink rather than a real directory,
 the call is refused and names what the id resolved to, instead of running the
 whole render against the link's target.
 
+A `work_dir` naming a system location, your home directory itself, a
+credential or agent-control location (`~/.ssh`, `~/.aws`, `~/.claude`, …) or
+**this server's own config directory (`~/.config/video-studio-mcp`)** is
+refused with `work_dir_denied`, subdirectories included. The work directory is
+yours; ours is not a workspace.
+
 ## Tools
 
 | Tool | Purpose |

@@ -13,11 +13,9 @@ import (
 
 	"github.com/nlink-jp/video-studio-mcp/internal/config"
 	"github.com/nlink-jp/video-studio-mcp/internal/logging"
-	"github.com/nlink-jp/video-studio-mcp/internal/master"
 	"github.com/nlink-jp/video-studio-mcp/internal/mcpserver"
 	"github.com/nlink-jp/video-studio-mcp/internal/tools"
 	"github.com/nlink-jp/video-studio-mcp/internal/transport"
-	"github.com/nlink-jp/video-studio-mcp/internal/workspace"
 )
 
 var serveCmd = &cobra.Command{
@@ -47,13 +45,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 	tr := transport.NewStdioTransport(os.Stdin, os.Stdout)
 	srv := mcpserver.New("video-studio-mcp", Version, tr, logger)
 	srv.SetInstructions(tools.Instructions)
-	tools.Register(srv, &tools.Deps{
-		Cfg:    cfg,
-		WS:     workspace.NewManager(),
-		Runner: master.ExecRunner{},
-		JobCtx: ctx, // async renders outlive the tool call but stop on shutdown
-		Logger: logger,
-	})
+	tools.Register(srv, newToolDeps(ctx, cfg, logger))
 
 	logger.Info("serving MCP over stdio", "version", Version)
 	if err := srv.Serve(ctx); err != nil {
@@ -73,11 +65,11 @@ func resolveConfig(explicit string) (*config.Config, string, error) {
 		cfg, err := config.Load(explicit)
 		return cfg, explicit, err
 	}
-	home, _ := os.UserHomeDir()
-	for _, c := range []string{
-		filepath.Join(home, ".config", "video-studio-mcp", "config.toml"),
-		"config.toml",
-	} {
+	candidates := []string{"config.toml"}
+	if dir := configDir(); dir != "" {
+		candidates = []string{filepath.Join(dir, "config.toml"), "config.toml"}
+	}
+	for _, c := range candidates {
 		if _, err := os.Stat(c); err == nil {
 			cfg, err := config.Load(c)
 			return cfg, c, err

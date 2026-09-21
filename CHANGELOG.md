@@ -4,6 +4,23 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Security
+
+- **`work_dir` may no longer be this server's own config directory.**
+  Organization ADR-021 §4 closes the work-directory checks with "not a system
+  location … and not the server's own config or state directory" →
+  `work_dir_denied`, and the resolver has carried a `Denied` list for exactly
+  that — but nothing populated it here, so it ran as its zero value. A caller
+  could pass `work_dir = ~/.config/video-studio-mcp` and have ffmpeg write
+  segments, concat lists and the rendered MP4 in among this server's own
+  configuration, on a model's say-so. `~/.config/video-studio-mcp` and
+  everything under it is now refused. The path comes from the same expression
+  `resolveConfig` searches, so the denial cannot drift away from the location
+  it protects, and the resolver is built in one place (`workDirResolver()`)
+  that every tool reaches through `tools.Deps`.
+
 ## [0.5.5] - 2026-09-21
 
 ### Security
