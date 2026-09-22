@@ -15,22 +15,32 @@ All notable changes to this project are documented here. The format follows
   list, or plant a link where ffmpeg wrote a segment or the master — ffmpeg
   then overwrote the link's target (measured with ffmpeg 9.0.2). Everything
   ffmpeg writes and reads back now lives in a private directory outside the
-  workspace, and only the finished MP4 is placed in the workspace through its
-  root (a link at its name is replaced, not followed). The page inputs are
+  workspace — under the user cache directory, which the agent sandboxes'
+  write lanes cannot write (their `$TMPDIR` they can) — and only the finished
+  MP4 is placed in the workspace through its root (a link at its name is
+  replaced, not followed). The page inputs are
   opened with their format pinned: images as single images, audio (and
   ffprobe) from a whitelist of audio formats only, the `file` protocol only.
 - A path holding a control character is no longer written into ffmpeg's concat
   list (a newline would add an entry of its own).
+- **An image ffmpeg cannot decode no longer runs it without end.** A GIF or a
+  truncated PNG named `.png` made ffmpeg fail on every looped frame, with
+  stderr growing without bound. Each page image is now decoded before ffmpeg
+  runs; one that does not read as PNG or JPEG is refused with
+  `invalid_manifest`.
 
 ### Changed
 
 - `keep_intermediates` copies the intermediates into `output/tmp` (on success
-  and on failure); without it nothing is left there, including after a failed
-  render.
+  and on every failure); without it nothing is left there, including after a
+  failed render. A render's private directory more than a day old (a server
+  killed mid-render) is removed by the next render.
 - Page audio is accepted in these formats: WAV, MP3, M4A/MP4, FLAC, Ogg/Opus,
   AAC, WebM/MKA, AIFF, CAF, W64, AU, AC3 and WMA. A file whose contents are a
   playlist or a concat list is refused.
-- An image's decoder comes from its own bytes, so a JPEG named `.png` renders.
+- Page images must be PNG or JPEG, as the README said: other formats ffmpeg
+  read by extension (BMP and the like) are now refused. An image's decoder
+  comes from its decoded format, so a JPEG named `.png` renders.
 - nlink-jp/pathguard v0.3.0.
 
 ## [0.6.1] - 2026-09-22

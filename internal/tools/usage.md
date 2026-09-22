@@ -33,9 +33,10 @@ output/            rendered mp4 + tmp    (server-written)
   page images and voice-studio synthesizes the audio under one directory, and
   this server muxes what it finds there.
 - Image/audio paths in the manifest are **relative to the workspace**.
-  Images are PNG or JPG; audio is WAV, MP3, M4A/MP4, FLAC, Ogg/Opus, AAC,
-  WebM/MKA or AIFF — a file whose contents are a playlist or a concat list is
-  refused.
+  Images are PNG or JPG, decoded before rendering (anything else, whatever its
+  name, is `invalid_manifest`); audio is WAV, MP3, M4A/MP4/MOV, FLAC, Ogg/Opus,
+  AAC, WebM/MKA, AIFF, CAF, W64, AU, AC3 or WMA — a file whose contents are a
+  playlist or a concat list is refused.
 - The server never reads or writes outside the workspace (kernel-enforced;
   symlinks inside the workspace that point outside fail with
   `path_not_allowed`). The workspace directory itself must be a real directory:
@@ -121,7 +122,8 @@ server config. Images are always letter/pillar-boxed to fit, so mixed source
 sizes never distort.
 
 **Intermediates**: the per-page segments, caption PNGs and ffmpeg's lists are
-made in a private directory outside the workspace and discarded. Pass
+made in a private directory under the user cache directory, outside the
+workspace, and discarded. Pass
 `keep_intermediates: true` to have them copied into `output/tmp` (debugging;
 on success and on failure).
 
@@ -129,7 +131,7 @@ on success and on failure).
 
 | code | action |
 |------|--------|
-| invalid_manifest | fix every entry in details.errors (missing image/audio, unknown key/transition, empty manifest), retry |
+| invalid_manifest | fix every entry in details.errors (missing image/audio, unknown key/transition, empty manifest), or replace the image details names with a PNG or JPEG, retry |
 | manifest_incomplete | place the missing files listed in details.missing into the workspace, then retry |
 | ffmpeg_not_found | the user must install ffmpeg (ffprobe ships with it) |
 | ffmpeg_failed | inspect details.stderr_tail; a bad image/audio input → fix that page, retry |

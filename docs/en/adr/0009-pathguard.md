@@ -138,20 +138,31 @@ scratch directory).
   or the output's name had its target overwritten by ffmpeg. The precondition is a caller that can keep writing into
   the workspace during a render (a code runner with the workspace mounted, say).
 - **Fixed at the cause:** everything ffmpeg writes and reads back — caption PNGs, segments, the concat list, chapters,
-  subtitles, and the master until it is placed — lives in a private directory made per render outside the workspace
-  under an unguessable name (0700). Only the master is placed, through the workspace's `os.Root`, under a temporary
+  subtitles, and the master until it is placed — lives in a private directory made per render under the user's cache
+  directory (`~/Library/Caches/video-studio-mcp/render` on macOS). Not `$TMPDIR`: gem-agent's and lagent's write lanes
+  can write `$TMPDIR` and `/private/tmp`, and a process running as the same user lists them, so an unguessable name is
+  no barrier (the independent review measured an overwrite from a sandboxed writer). Neither lane can write the cache
+  directory (the read lane only reads it). What a server killed mid-render left is cleared by the next render once it
+  is a day old. Only the master is placed, through the workspace's `os.Root`, under a temporary
   name and then renamed, so a link at its name is replaced rather than followed and a component leading out is
-  refused. `keep_intermediates` copies the intermediates into `output/tmp` the same way (on success and on failure).
+  refused. `keep_intermediates` copies the intermediates into `output/tmp` the same way (on success and on failure,
+  including when the master cannot be placed).
 - **Inputs pinned:** only the page inputs are read from the workspace. An image is read as `image2` with no pattern (a
-  `%` is a name too), its decoder chosen from the file's leading bytes (by extension, a JPEG named `.png` never
-  finished); audio and ffprobe take a whitelist of audio formats only (wav, mp3, mov/mp4/m4a, flac, ogg, aac,
+  `%` is a name too). Each image is decoded in Go at the first check, and one that does not read as PNG or JPEG — a
+  GIF named `.png`, a truncated PNG, bytes that are no image — is refused with `invalid_manifest` before ffmpeg runs:
+  handed an image it cannot decode, ffmpeg failed on every looped frame and never ended, its stderr growing without
+  bound (measured). ffmpeg's decoder comes from that decode too (by extension, a JPEG named `.png` never finished).
+  Formats other than the PNG/JPG the README named (BMP and the rest ffmpeg read by extension) are now refused. Audio
+  and ffprobe take a whitelist of audio formats only (wav, mp3, mov/mp4/m4a, flac, ogg, aac,
   matroska/webm, aiff, caf, w64, au, ac3, asf — neither a concat list nor a playlist); only the `file` protocol. With
   the server's own argument shape, the accepted formats render and the crafted file is refused as "not on whitelist".
   A path holding a control character is not written into the concat list.
 - **Accepted residuals** (the operator's rule: an overall risk assessment rather than perfection): a page input
   swapped for a link to outside between its judgement and ffmpeg's open can be read — but with the format pinned only
-  an image or audio that parses as that format is, never a credential file. A corrupt image still makes ffmpeg run
-  without end (older than this change). pathguard is at v0.3.0 (no behaviour change for this server).
+  an image or audio that parses as that format is, never a credential file. In the same gap, an image that passed the
+  decode swapped for a corrupt one makes ffmpeg run without end — but only the caller's own render stalls. The cache
+  directory is writable by a process of the same user running outside the sandbox (the operator lane, say) — which is
+  what the user can do anyway. pathguard is at v0.3.0 (no behaviour change for this server).
 
 ## References
 

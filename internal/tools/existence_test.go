@@ -44,7 +44,7 @@ func TestExistenceIsNotRevealed(t *testing.T) {
 	symlink(t, filepath.Join(ws, "ssh_config.png"), filepath.Join(home, ".ssh", "config"))
 	symlink(t, filepath.Join(home, ".aws", "planted.png"), filepath.Join(ws, "lnk_file.png"))
 	symlink(t, filepath.Join(home, ".aws"), filepath.Join(ws, "lnk_dir"))
-	writeFileAt(t, filepath.Join(ws, "ok.png"), "img")
+	writeFileAt(t, filepath.Join(ws, "ok.png"), pngImage)
 	writeFileAt(t, filepath.Join(ws, "ok.wav"), "aud")
 
 	srv := serverWithDir(t, server)
@@ -103,7 +103,7 @@ func TestExistenceIsNotRevealed(t *testing.T) {
 	}
 	// A page name ffmpeg reads as a pattern is refused on the call, async too.
 	async = true
-	writeFileAt(t, filepath.Join(ws, "p%d.png"), "img")
+	writeFileAt(t, filepath.Join(ws, "p%d.png"), pngImage)
 	if a := answer("deck.jsonl", `{"image":"p%d.png","audio":"ok.wav"}`); !strings.HasPrefix(a, toolerr.CodePathNotAllowed+" ") {
 		t.Errorf("an async deck with a pattern name: %s, want path_not_allowed on the call", a)
 	}

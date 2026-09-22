@@ -1,9 +1,13 @@
 package tools
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"image"
+	"image/png"
 	"io"
 	"os"
 	"path/filepath"
@@ -20,6 +24,29 @@ import (
 	"github.com/nlink-jp/video-studio-mcp/internal/workdir"
 	"github.com/nlink-jp/video-studio-mcp/internal/workspace"
 )
+
+// The home directory is a temporary one for every test here: a render makes its
+// private directory under the user cache directory, which is under $HOME.
+func TestMain(m *testing.M) {
+	home, err := os.MkdirTemp("", "video-studio-tools-test-")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	_ = os.Setenv("HOME", home)
+	code := m.Run()
+	_ = os.RemoveAll(home)
+	os.Exit(code)
+}
+
+// pngImage is a page image the renderer can decode (it refuses anything else).
+var pngImage = func() string {
+	var b bytes.Buffer
+	if err := png.Encode(&b, image.NewRGBA(image.Rect(0, 0, 4, 4))); err != nil {
+		panic(err)
+	}
+	return b.String()
+}()
 
 // fakeRunner returns a canned duration for ffprobe and materializes the output
 // file for ffmpeg, so tests need neither binary.
@@ -88,7 +115,7 @@ func seedDeck(t *testing.T, wsID string) string {
 		`{"image":"images/p02.png","audio":"audio/p02.wav"}` + "\n"
 	writeFile(t, filepath.Join(base, "deck.jsonl"), man)
 	for _, n := range []string{"p01", "p02"} {
-		writeFile(t, filepath.Join(base, "images", n+".png"), "img")
+		writeFile(t, filepath.Join(base, "images", n+".png"), pngImage)
 		writeFile(t, filepath.Join(base, "audio", n+".wav"), "aud")
 	}
 	return root

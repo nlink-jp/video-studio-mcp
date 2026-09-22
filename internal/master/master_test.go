@@ -1,13 +1,19 @@
 package master
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"image"
+	"image/gif"
+	"image/jpeg"
+	"image/png"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/nlink-jp/video-studio-mcp/internal/config"
 	"github.com/nlink-jp/video-studio-mcp/internal/manifest"
@@ -43,6 +49,45 @@ func (f *fakeRunner) Run(ctx context.Context, name string, args []string) ([]byt
 	return nil, nil, 0, nil
 }
 
+// testPrivateRoot stands in for the user cache directory, so a test run leaves
+// nothing there and a test can look at what a render left behind.
+var testPrivateRoot string
+
+func TestMain(m *testing.M) {
+	dir, err := os.MkdirTemp("", "video-studio-master-test-")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	testPrivateRoot = filepath.Join(dir, "render")
+	privateRoot = func() (string, error) { return testPrivateRoot, nil }
+	code := m.Run()
+	_ = os.RemoveAll(dir)
+	os.Exit(code)
+}
+
+// encoded returns a 4x4 image in the named format.
+func encoded(t *testing.T, format string) []byte {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, 4, 4))
+	var b bytes.Buffer
+	var err error
+	switch format {
+	case "png":
+		err = png.Encode(&b, img)
+	case "jpeg":
+		err = jpeg.Encode(&b, img, nil)
+	case "gif":
+		err = gif.Encode(&b, img, nil)
+	default:
+		t.Fatalf("no encoder for %s", format)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b.Bytes()
+}
+
 func isProbe(args []string) bool {
 	for _, a := range args {
 		if a == "-show_entries" {
@@ -70,7 +115,7 @@ func seed(t *testing.T, pages []manifest.Page) *workspace.Workspace {
 		t.Fatal(err)
 	}
 	for _, p := range pages {
-		writeInside(t, ws, p.Image, "img")
+		writeInside(t, ws, p.Image, string(encoded(t, "png")))
 		writeInside(t, ws, p.Audio, "aud")
 	}
 	return ws
@@ -838,7 +883,7 @@ func TestAWorkspacePathThatIsAPatternIsRefused(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, p := range pages {
-		writeInside(t, ws, p.Image, "img")
+		writeInside(t, ws, p.Image, string(encoded(t, "png")))
 		writeInside(t, ws, p.Audio, "aud")
 	}
 	r := &fakeRunner{}
@@ -994,30 +1039,114 @@ func TestALinkPlantedAtTheMasterIsReplacedNotWrittenThrough(t *testing.T) {
 	}
 }
 
-// The image's decoder comes from its own bytes: image2 picks it from the
-// extension, and a JPEG named .png never finished (measured, ffmpeg 9.0.2).
-func TestAnImageIsDecodedByItsOwnBytes(t *testing.T) {
-	for _, c := range []struct {
-		head []byte
-		want string
-	}{
-		{[]byte("\x89PNG\r\n\x1a\nrest"), "png"},
-		{[]byte{0xFF, 0xD8, 0xFF, 0xE0, 0, 0}, "mjpeg"},
-		{[]byte("BM\x00\x00"), ""},
-		{nil, ""},
-	} {
-		if got := imageCodec(c.head); got != c.want {
-			t.Errorf("imageCodec(%q) = %q, want %q", c.head, got, c.want)
+// Each image is decoded before any ffmpeg runs: ffmpeg fed an image it cannot
+// decode fails on every looped frame and never ends (measured, ffmpeg 9.0.2).
+// What decodes names the decoder, whatever the extension says; what does not
+// decode as PNG or JPEG is refused as a manifest error.
+func TestAnImageIsDecodedBeforeFFmpegSeesIt(t *testing.T) {
+	pages := []manifest.Page{{Image: "images/p01.png", Audio: "audio/p01.wav"}}
+	for format, codec := range map[string]string{"jpeg": "mjpeg", "png": "png"} {
+		ws := seed(t, pages)
+		writeInside(t, ws, "images/p01.png", string(encoded(t, format)))
+		fr := &fakeRunner{dur: "2.000"}
+		if _, err := newMaster(fr).Build(context.Background(), ws, "deck", pages, Options{}); err != nil {
+			t.Fatalf("a %s named .png: build: %v", format, err)
+		}
+		if seg := strings.Join(fr.cmds[1], " "); !strings.Contains(seg, "-c:v "+codec+" -protocol_whitelist file -i "+ws.Path("images/p01.png")) {
+			t.Errorf("a %s named .png is not decoded with %s: %s", format, codec, seg)
 		}
 	}
-	pages := []manifest.Page{{Image: "images/p01.png", Audio: "audio/p01.wav"}}
-	ws := seed(t, pages)
-	writeInside(t, ws, "images/p01.png", "\xFF\xD8\xFFjpeg bytes named .png")
-	fr := &fakeRunner{dur: "2.000"}
-	if _, err := newMaster(fr).Build(context.Background(), ws, "deck", pages, Options{}); err != nil {
-		t.Fatalf("build: %v", err)
+
+	pngBytes := encoded(t, "png")
+	for name, content := range map[string][]byte{
+		"a GIF named .png":        encoded(t, "gif"),
+		"a truncated PNG":         pngBytes[:len(pngBytes)/2],
+		"bytes that are no image": []byte("not an image at all"),
+	} {
+		ws := seed(t, pages)
+		writeInside(t, ws, "images/p01.png", string(content))
+		fr := &fakeRunner{dur: "2.000"}
+		_, err := newMaster(fr).Build(context.Background(), ws, "deck", pages, Options{})
+		if !errors.Is(err, toolerr.New(toolerr.CodeInvalidManifest, "")) {
+			t.Errorf("%s: err = %v, want invalid_manifest", name, err)
+		}
+		if len(fr.cmds) != 0 {
+			t.Errorf("%s: ffmpeg ran anyway: %v", name, fr.cmds)
+		}
 	}
-	if seg := strings.Join(fr.cmds[1], " "); !strings.Contains(seg, "-c:v mjpeg -protocol_whitelist file -i "+ws.Path("images/p01.png")) {
-		t.Errorf("a JPEG named .png is not decoded as JPEG: %s", seg)
+}
+
+// The private directory goes when the render ends, succeeded or failed, and a
+// directory more than a day old — left by a server killed mid-render — is
+// cleared by the next render; a younger one (a render in progress) is not.
+func TestThePrivateDirectoryDoesNotOutliveTheRender(t *testing.T) {
+	stale := filepath.Join(testPrivateRoot, "render-stale")
+	fresh := filepath.Join(testPrivateRoot, "render-fresh")
+	for _, d := range []string{stale, fresh} {
+		if err := os.MkdirAll(d, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	defer func() { _ = os.Remove(fresh) }()
+	old := time.Now().Add(-25 * time.Hour)
+	if err := os.Chtimes(stale, old, old); err != nil {
+		t.Fatal(err)
+	}
+	for _, failAt := range []int{0, 3} {
+		ws := seed(t, twoPages)
+		fr := &fakeRunner{dur: "2.000", failAt: failAt, exitCode: 1}
+		_, err := newMaster(fr).Build(context.Background(), ws, "deck", twoPages, Options{})
+		if (err != nil) != (failAt != 0) {
+			t.Fatalf("failAt %d: err = %v", failAt, err)
+		}
+		entries, err := os.ReadDir(testPrivateRoot)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var left []string
+		for _, e := range entries {
+			left = append(left, e.Name())
+		}
+		if len(left) != 1 || left[0] != "render-fresh" {
+			t.Errorf("failAt %d: left in the private root: %v (want only render-fresh)", failAt, left)
+		}
+	}
+}
+
+// Asked to keep the intermediates, a render that fails still leaves what it
+// made in output/tmp — that is when they are wanted: when ffmpeg fails, and
+// when the finished master cannot be placed (a directory stands at its name).
+func TestIntermediatesAreKeptWhenTheRenderFails(t *testing.T) {
+	for _, c := range []struct {
+		name   string
+		failAt int // 5: the concat, after 2 probes and 2 segments
+		block  bool
+	}{
+		{"the concat fails", 5, false},
+		{"the master cannot be placed", 0, true},
+	} {
+		ws := seed(t, twoPages)
+		if c.block {
+			writeInside(t, ws, filepath.Join(workspace.DirOutput, "deck.mp4", "occupied"), "x")
+		}
+		fr := &fakeRunner{dur: "2.000", failAt: c.failAt, exitCode: 1}
+		if _, err := newMaster(fr).Build(context.Background(), ws, "deck", twoPages, Options{KeepIntermediate: true}); err == nil {
+			t.Fatalf("%s: Build succeeded", c.name)
+		}
+		for _, name := range []string{"seg_001.mp4", "seg_002.mp4", "concat.txt"} {
+			if _, err := os.Stat(ws.Path(workspace.DirOutput, "tmp", name)); err != nil {
+				t.Errorf("%s: output/tmp/%s was not kept: %v", c.name, name, err)
+			}
+		}
+	}
+}
+
+// The ffmpeg format names are spelled out here, not read back from the
+// variable: dropping one (a user's CAF no longer opens) or adding a playlist
+// or device format fails this test.
+func TestTheAudioFormatListIsSpelledOut(t *testing.T) {
+	want := "wav,mp3,mov,mp4,m4a,3gp,3g2,mj2,flac,ogg,aac,matroska,webm,aiff,caf,w64,au,ac3,asf"
+	if audioFormats != want {
+		t.Errorf("audioFormats = %q, want %q", audioFormats, want)
 	}
 }

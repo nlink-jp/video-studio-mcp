@@ -47,11 +47,17 @@ Never `go build` directly — always `make build` (outputs to `dist/`).
   ffmpeg picks a format from the contents, and a page holding an ffconcat list
   was followed outside the workspace (ADR-0009, v0.6.2). A new input goes
   through these helpers. **Nothing ffmpeg writes or reads back lives in the
-  workspace**: `Build` makes a private directory per render (`os.MkdirTemp`)
+  workspace**: `Build` makes a private directory per render (`privateDir`,
+  under the user cache directory — **not `$TMPDIR`**, which gem-agent's and
+  lagent's write lanes can write; tests replace `privateRoot` in `TestMain`)
   for captions, segments, lists and the master, and places only the master
   through the workspace root (`Workspace.PlaceFile`); a caller writing into the
   workspace during a render took the output 10 of 10 times when the concat list
-  lived there. The image decoder comes from the file's bytes (`imageCodec`).
+  lived there. `keep_intermediates` copies are deferred, so they run on every
+  way out. Page images are decoded in Go at step 1 (`imageDecoder`: PNG or
+  JPEG, else `invalid_manifest`) — ffmpeg handed an undecodable image never
+  ends — and the decoded format names ffmpeg's decoder. Test fixtures must be
+  real PNGs (`encoded` / `pngImage`).
 - `internal/job/` — in-memory background-render jobs (one render per job);
   progress + result/error tracking; NOT persisted (`job_not_found` on restart).
 - `internal/caption/` — renders a caption string to a transparent canvas-sized
@@ -89,12 +95,13 @@ Never `go build` directly — always `make build` (outputs to `dist/`).
   against `<real work_dir>/<id>`; a mismatch is refused. The comparison is the
   load-bearing half — the root-based mkdir alone cannot help a path that later
   leaves the process.
-- **The final MP4 is cleared through the root before the spawn** — ffmpeg opens
-  the output path itself and would follow a symlink planted at
-  `output/<name>.mp4`, overwriting the link's target. `Build` calls
-  `ws.RemoveAll(outRel)` first (a root-based remove unlinks the link, never what
-  it points at) so ffmpeg always creates the file fresh. `output/tmp` was
-  already handled this way; the master was not.
+- **The final MP4 is placed, never written by ffmpeg, in the workspace** —
+  ffmpeg opens its output path itself and would follow a symlink planted at
+  `output/<name>.mp4`, overwriting the link's target. It writes into the
+  private directory instead, and `Workspace.PlaceFile` copies the result in
+  through the root: an entry planted at `<name>.tmp` is unlinked, the
+  temporary is created `O_EXCL`, then renamed over the name (a link there is
+  replaced, not followed).
 - **The workspace judges every read.** `Workspace.ReadFile`, `Stat` and
   `VerifyRegular` call `Judge` first — pathguard's Local policy with this
   server's own directories, the `floor` that `workspace.NewManager(check,
@@ -184,9 +191,9 @@ Never `go build` directly — always `make build` (outputs to `dist/`).
   (ffmpeg here lacks libfreetype) and over a soft `mov_text` track (burn-in
   survives muted autoplay). Default off.
 - **ADR-0005**: per-call canvas override (`width`/`height`/`fps`, re-validated
-  via `VideoConfig.Validate`) for multi-aspect output, and discard of
-  `output/tmp` intermediates after a successful render (`keep_intermediates` to
-  keep).
+  via `VideoConfig.Validate`) for multi-aspect output, and discard of the
+  intermediates (`keep_intermediates` copies them into `output/tmp`; since
+  v0.6.2 they are made outside the workspace, ADR-0009).
 - **ADR-0006**: closed captions — `soft_captions` embeds a `mov_text` subtitle
   track (SRT built per-page, muxed at concat); additive to the burn-in `captions`
   flag; complementary (soft = toggleable/accessible, burn = muted-autoplay).

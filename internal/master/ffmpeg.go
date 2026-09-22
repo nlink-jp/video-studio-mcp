@@ -34,9 +34,9 @@ import (
 // be any audio format but never a playlist; only the file protocol is allowed.
 const audioFormats = "wav,mp3,mov,mp4,m4a,3gp,3g2,mj2,flac,ogg,aac,matroska,webm,aiff,caf,w64,au,ac3,asf"
 
-// imageInput opens path as one image. codec is the decoder the file's own
-// bytes call for (imageCodec): image2 otherwise picks it from the extension,
-// and a JPEG named .png then fails on every looped frame and never ends.
+// imageInput opens path as one image. codec is the decoder the image decoded
+// as (imageDecoder): image2 otherwise picks it from the extension, and a JPEG
+// named .png then fails on every looped frame and never ends.
 func imageInput(path, codec string, loop bool) []string {
 	args := []string{"-f", "image2", "-pattern_type", "none"}
 	if loop {
@@ -46,18 +46,6 @@ func imageInput(path, codec string, loop bool) []string {
 		args = append(args, "-c:v", codec)
 	}
 	return append(args, "-protocol_whitelist", "file", "-i", path)
-}
-
-// imageCodec names the decoder for an image by its leading bytes, or "" to
-// leave it to the extension (BMP, TIFF and the rest image2 reads by name).
-func imageCodec(head []byte) string {
-	switch {
-	case len(head) >= 8 && string(head[:8]) == "\x89PNG\r\n\x1a\n":
-		return "png"
-	case len(head) >= 3 && head[0] == 0xFF && head[1] == 0xD8 && head[2] == 0xFF:
-		return "mjpeg"
-	}
-	return ""
 }
 
 func audioInput(path string) []string {

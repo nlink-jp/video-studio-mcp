@@ -170,3 +170,45 @@ func TestEveryReadIsJudgedBeforeItLooks(t *testing.T) {
 		t.Errorf("a Workspace without a floor read: %v", err)
 	}
 }
+
+// PlaceFile writes through a temporary name next to the destination: a link a
+// caller plants at that name, or at the destination, is replaced — the file it
+// points at, outside the workspace, is never written.
+func TestPlaceFileReplacesLinksItFinds(t *testing.T) {
+	work := t.TempDir()
+	w, err := NewManager(allowAll, noFloor).EnsureUnder(work, "deck")
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := filepath.Join(t.TempDir(), "rendered.mp4")
+	if err := os.WriteFile(src, []byte("RENDERED"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(w.Path(DirOutput), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, planted := range []string{"deck.mp4.tmp", "deck.mp4"} {
+		victim := filepath.Join(t.TempDir(), "victim")
+		if err := os.WriteFile(victim, []byte("keep me"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		link := w.Path(DirOutput, planted)
+		_ = os.Remove(link)
+		if err := os.Symlink(victim, link); err != nil {
+			t.Skipf("symlinks unavailable: %v", err)
+		}
+		if err := w.PlaceFile(filepath.Join(DirOutput, "deck.mp4"), src); err != nil {
+			t.Fatalf("%s planted: PlaceFile: %v", planted, err)
+		}
+		if b, _ := os.ReadFile(victim); string(b) != "keep me" {
+			t.Errorf("%s planted: the link's target was written: %q", planted, b)
+		}
+		fi, err := os.Lstat(w.Path(DirOutput, "deck.mp4"))
+		if err != nil || !fi.Mode().IsRegular() {
+			t.Fatalf("%s planted: the destination is not a regular file: %v %v", planted, fi, err)
+		}
+		if b, _ := os.ReadFile(w.Path(DirOutput, "deck.mp4")); string(b) != "RENDERED" {
+			t.Errorf("%s planted: destination holds %q", planted, b)
+		}
+	}
+}

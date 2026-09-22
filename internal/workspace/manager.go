@@ -215,30 +215,6 @@ func (w *Workspace) PlaceFile(rel, src string) error {
 	return nil
 }
 
-// Head returns up to n leading bytes of a workspace-relative file, judged and
-// read inside the containment root — enough to tell an image's real format.
-func (w *Workspace) Head(rel string, n int) ([]byte, error) {
-	if err := w.Judge(rel); err != nil {
-		return nil, err
-	}
-	r, err := w.openRoot()
-	if err != nil {
-		return nil, err
-	}
-	defer r.Close()
-	f, err := r.Open(rel)
-	if err != nil {
-		return nil, w.rootErr("open", rel, err)
-	}
-	defer func() { _ = f.Close() }()
-	buf := make([]byte, n)
-	k, err := io.ReadFull(f, buf)
-	if err != nil && !errors.Is(err, io.ErrUnexpectedEOF) && !errors.Is(err, io.EOF) {
-		return nil, w.rootErr("read", rel, err)
-	}
-	return buf[:k], nil
-}
-
 // Stat stats a workspace-relative path with symlink containment.
 func (w *Workspace) Stat(rel string) (fs.FileInfo, error) {
 	if err := w.Judge(rel); err != nil {

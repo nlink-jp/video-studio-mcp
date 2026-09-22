@@ -1,14 +1,19 @@
 package master
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"image"
+	_ "image/jpeg" // image.Decode: page images are PNG or JPEG
+	_ "image/png"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/nlink-jp/video-studio-mcp/internal/caption"
 	"github.com/nlink-jp/video-studio-mcp/internal/config"
@@ -60,11 +65,66 @@ type Result struct {
 // caption text, transition into the next page, and probed audio duration.
 type resolved struct {
 	imgRel     string
+	imgCodec   string // the decoder the image's own bytes call for (png, mjpeg)
 	audioRel   string
 	title      string
 	caption    string
 	transition string
 	durSec     float64
+}
+
+// privateRoot is where each render's private directory is made: the user's
+// cache directory, which no agent write lane covers — $TMPDIR is in gem-agent's
+// and lagent's write lanes, and a process running as the same user lists it
+// (ADR-0009). A test replaces it.
+var privateRoot = func() (string, error) {
+	c, err := os.UserCacheDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(c, "video-studio-mcp", "render"), nil
+}
+
+// privateDir makes this render's directory under privateRoot, clearing what
+// renders more than a day old left behind (a server killed mid-render cannot
+// clean up after itself).
+func privateDir() (string, error) {
+	root, err := privateRoot()
+	if err != nil {
+		return "", err
+	}
+	if err := os.MkdirAll(root, 0o700); err != nil {
+		return "", err
+	}
+	if entries, err := os.ReadDir(root); err == nil {
+		for _, e := range entries {
+			if info, err := e.Info(); err == nil && time.Since(info.ModTime()) > 24*time.Hour {
+				_ = os.RemoveAll(filepath.Join(root, e.Name()))
+			}
+		}
+	}
+	return os.MkdirTemp(root, "render-")
+}
+
+// imageDecoder decodes a page image (judged and read inside the workspace root)
+// and names the ffmpeg decoder for it: png or mjpeg. Anything that does not
+// decode as PNG or JPEG is an error.
+func imageDecoder(ws *workspace.Workspace, rel string) (string, error) {
+	b, err := ws.ReadFile(rel)
+	if err != nil {
+		return "", err
+	}
+	_, format, err := image.Decode(bytes.NewReader(b))
+	if err != nil {
+		return "", err
+	}
+	switch format {
+	case "png":
+		return "png", nil
+	case "jpeg":
+		return "mjpeg", nil
+	}
+	return "", fmt.Errorf("decoded as %s", format)
 }
 
 // Build validates that every page's image and audio exist in the workspace,
@@ -123,8 +183,20 @@ func (m *Master) Build(ctx context.Context, ws *workspace.Workspace, manifestSte
 			missing = append(missing, miss)
 			continue
 		}
+		// The image is decoded here, once: ffmpeg fed an image it cannot decode
+		// — a GIF or a truncated PNG named .png — fails on every looped frame
+		// and never ends, its stderr growing without bound. What decodes is
+		// PNG or JPEG (the formats this server takes), and that also names
+		// the decoder ffmpeg is told to use, whatever the extension says.
+		codec, err := imageDecoder(ws, imgRel)
+		if err != nil {
+			return Result{}, toolerr.Newf(toolerr.CodeInvalidManifest,
+				"page %d: image %q is not a PNG or JPEG image that can be read (%v)", i+1, p.Image, err).
+				WithDetails(map[string]any{"page": i + 1, "image": p.Image})
+		}
 		items = append(items, resolved{
 			imgRel:     imgRel,
+			imgCodec:   codec,
 			audioRel:   audioRel,
 			title:      p.Title,
 			caption:    p.Caption,
@@ -163,7 +235,7 @@ func (m *Master) Build(ctx context.Context, ws *workspace.Workspace, manifestSte
 	// link planted where ffmpeg will write — steered ffmpeg outside the
 	// workspace (measured, ADR-0009). ffmpeg reads only the page inputs from
 	// the workspace, with their formats pinned.
-	priv, err := os.MkdirTemp("", "video-studio-render-")
+	priv, err := privateDir()
 	if err != nil {
 		return Result{}, toolerr.Newf(toolerr.CodeWorkspaceFailed, "make a private render directory: %v", err)
 	}
@@ -173,14 +245,17 @@ func (m *Master) Build(ctx context.Context, ws *workspace.Workspace, manifestSte
 		return Result{}, toolerr.Newf(toolerr.CodeWorkspaceFailed, "clean tmp: %v", err)
 	}
 	var kept []string // intermediates to copy into output/tmp when asked to keep them
-	keep := func() {
+	// On every way out, success or failure, before the private directory goes
+	// (deferred calls run last-in, first-out). Best effort: a copy that fails
+	// does not fail the render.
+	defer func() {
 		if !opts.KeepIntermediate {
 			return
 		}
 		for _, name := range kept {
 			_ = ws.PlaceFile(filepath.Join(tmpRel, name), filepath.Join(priv, name))
 		}
-	}
+	}()
 
 	// 4. Render one segment per page. ffmpeg cannot inherit os.Root, so the
 	// image/audio inputs verified in step 1 are handed over as absolute paths.
@@ -223,19 +298,11 @@ func (m *Master) Build(ctx context.Context, ws *workspace.Workspace, manifestSte
 		// can take minutes, and page N is opened only after page N-1 is done.
 		for _, rel := range []string{items[i].imgRel, items[i].audioRel} {
 			if err := ws.VerifyRegular(rel); err != nil {
-				keep()
 				return Result{}, err
 			}
 		}
-		// The image's decoder comes from its own bytes, not its extension.
-		head, err := ws.Head(items[i].imgRel, 8)
-		if err != nil {
-			keep()
-			return Result{}, err
-		}
-		args := segmentArgs(m.Cfg, ws.Path(items[i].imgRel), imageCodec(head), ws.Path(items[i].audioRel), capPath, items[i].durSec, fadeIn, fadeOut, segPath)
+		args := segmentArgs(m.Cfg, ws.Path(items[i].imgRel), items[i].imgCodec, ws.Path(items[i].audioRel), capPath, items[i].durSec, fadeIn, fadeOut, segPath)
 		if err := m.runFFmpeg(ctx, args); err != nil {
-			keep()
 			return Result{}, err
 		}
 		segPaths = append(segPaths, segPath)
@@ -296,15 +363,11 @@ func (m *Master) Build(ctx context.Context, ws *workspace.Workspace, manifestSte
 	report("finalizing", len(items), len(items))
 	rendered := filepath.Join(priv, "master.mp4")
 	if err := m.runFFmpeg(ctx, concatArgs(listPath, metadataPath, subtitlePath, rendered)); err != nil {
-		keep()
 		return Result{}, err
 	}
 	if err := ws.PlaceFile(outRel, rendered); err != nil {
 		return Result{}, err
 	}
-	// The intermediates go away with the private directory, unless the caller
-	// asked to keep them: then they are copied into output/tmp.
-	keep()
 
 	return Result{
 		MasterPath:      ws.Path(outRel),

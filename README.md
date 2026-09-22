@@ -124,9 +124,11 @@ per render with `width`/`height`/`fps` (even dimensions ≥16) to produce the sa
 deck as **16:9** (1920×1080), **9:16** vertical (1080×1920), or **1:1**
 (1080×1080) — useful for social distribution. Images are always
 letter/pillar-boxed to fit. The per-page intermediates are made in a private
-directory outside the workspace and discarded (`keep_intermediates: true`
-copies them into `output/tmp`); only the finished MP4 is placed in the
-workspace, so a file changed there during a render cannot steer ffmpeg.
+directory under the user cache directory (`~/Library/Caches/video-studio-mcp`
+on macOS), outside the workspace, and discarded (`keep_intermediates: true`
+copies them into `output/tmp`, also when the render fails); only the finished
+MP4 is placed in the workspace. From the workspace ffmpeg reads only the page
+images and audio, each opened as its own format.
 
 ### Captions
 
@@ -178,10 +180,13 @@ restart (an unknown `job_id` returns `job_not_found` — just re-run `master`).
 {"image":"images/p02.png","audio":"audio/p02.wav","caption":"見出し","transition":"cut"}
 ```
 
-- `image` (required) — workspace-relative still image (PNG/JPG).
+- `image` (required) — workspace-relative still image (PNG/JPG). It is decoded
+  before rendering: a file that does not read as PNG or JPEG (a GIF, a
+  truncated file — whatever its name) is refused with `invalid_manifest`.
 - `audio` (required) — workspace-relative narration audio; its duration sets the
-  page's on-screen time. WAV, MP3, M4A/MP4, FLAC, Ogg/Opus, AAC, WebM/MKA or
-  AIFF; a file whose contents are a playlist or a concat list is refused.
+  page's on-screen time. WAV, MP3, M4A/MP4/MOV, FLAC, Ogg/Opus, AAC, WebM/MKA,
+  AIFF, CAF, W64, AU, AC3 or WMA; a file whose contents are a playlist or a
+  concat list is refused.
 - `title` (optional) — the page's **chapter-marker** name (default `Page N`).
 - `caption` (optional) — subtitle text **burned into the video** when `master`
   is called with `captions: true` (ignored otherwise).
