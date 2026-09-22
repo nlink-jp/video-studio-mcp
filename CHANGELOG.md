@@ -4,6 +4,32 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.6.1] - 2026-09-22
+
+### Security
+
+- **Every file the server reads from a workspace is judged before it is
+  read.** A `manifest_path`, or an image or audio the manifest names, that is
+  a `.env`, lies in this server's config directory, or is where a link
+  directly inside a credential directory points (a workspace can contain
+  each) was read: as the manifest its first bytes came back in the parse
+  error, as a page it was handed to ffmpeg, and the answer differed from the
+  one for a missing file. It is now refused with `path_not_allowed`, the same
+  answer whether or not the file is there (ADR-0009, amendment).
+- Every page is verified again immediately before ffprobe or ffmpeg opens
+  it: a page swapped for a link during a render (minutes, when async) was
+  handed over.
+- A page whose path holds `%` — its name or the `work_dir` — is refused:
+  ffmpeg read `p%d.png` as a sequence and would open `p0.png`, `p1.png`, …
+  unjudged.
+
+### Changed
+
+- A page the floor refuses, one that escapes the workspace lexically, and one
+  whose path holds `%` are answered on the call, before a job is created and
+  before `ffmpeg_not_found`; a refused manifest is `path_not_allowed`, not
+  `invalid_manifest`.
+
 ## [0.6.0] - 2026-09-22
 
 ### Changed
