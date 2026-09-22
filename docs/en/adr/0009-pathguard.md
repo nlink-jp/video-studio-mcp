@@ -62,6 +62,34 @@ required argument, and `EnsureUnder` judges `<work_dir>/<workspace_id>` with
 A Manager without one refuses every workspace. pathguard v0.2.0 also refuses a path holding a NUL
 byte.
 
+## Amendment (2026-09-22, v0.6.1): judge a file the caller names before reading it
+
+`manifest_path` and the images and audio the manifest names are workspace-relative and handled
+through the `os.Root`, but the floor was not applied to them. A workspace passes `CheckBeneath` and can
+still contain places on the floor (a `.env`, this server's config directory, the target of a link in
+`~/.ssh` when the workspace is in that sync folder). Such a file was read as the manifest, its first
+bytes coming back in the parse error (`invalid character 'S'`), or, named as a page, accepted and
+handed to ffmpeg; and the answer differed from the "not found" / `manifest_incomplete` for a missing
+one. It is the existence class the independent reviews of slack-mcp-extender and chrome-pilot-mcp
+found, measured here with the home directory redirected to a temporary one (9 of 15 pairs; the 6
+planted links out of the workspace were refused by the `os.Root` whether or not their targets
+existed).
+
+- The master tool judges `manifest_path`, then every page's image and audio, with `refused`
+  (internal/tools/master.go) — pathguard's Local policy with this server's own directories: the
+  manifest before `ws.ReadFile`, the pages before `Build` looks for any of them (on the call itself,
+  async or not). pathguard follows the links on the path itself, so no separate placement is needed.
+- `TestExistenceIsNotRevealed` calls `master` with the same path as the manifest, an image and an
+  audio, while a file is there and after it is removed, compares the whole answer and checks that no
+  contents come back. Three mutations (no floor, the manifest unjudged, the pages unjudged) all fail
+  by assertion.
+- Known limits, all in pathguard and recorded for its next release:
+  - `work_dir` is validated by pathguard/workdir in the order organization ADR-022 §4 sets (not found
+    before denied), so a `work_dir` naming a credential directory is answered by whether it exists.
+  - A link target with a non-ASCII name spelled in another Unicode normalisation is found by identity
+    only while it exists (pathguard does not normalise), and so is a hard link to a credential file
+    made elsewhere. Whoever can make a hard link already reaches the file.
+
 ## References
 
 - Organization ADR-021 (the work-dir contract of the file-mediated MCP servers)

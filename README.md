@@ -98,6 +98,13 @@ refused with `work_dir_denied`, subdirectories included, under any spelling
 ([nlink-jp/pathguard](https://github.com/nlink-jp/pathguard) makes that
 judgement). The work directory is yours; ours is not a workspace.
 
+A `manifest_path`, or an image or audio the manifest names, that is a `.env`,
+lies in this server's config directory, or is where a link directly inside a
+credential directory points is refused with `path_not_allowed` before anything
+reads it — whether or not the file is there, with the same answer either way.
+A workspace can contain such a place (one inside a sync folder that
+`~/.ssh/config` links into).
+
 ## Tools
 
 | Tool | Purpose |

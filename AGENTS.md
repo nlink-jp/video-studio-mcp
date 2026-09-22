@@ -80,6 +80,17 @@ Never `go build` directly — always `make build` (outputs to `dist/`).
   `ws.RemoveAll(outRel)` first (a root-based remove unlinks the link, never what
   it points at) so ffmpeg always creates the file fresh. `output/tmp` was
   already handled this way; the master was not.
+- **A file the caller names is judged before it is read.** The master tool
+  judges `manifest_path` and then every page's image and audio with `refused`
+  (internal/tools/master.go) — pathguard's Local policy with this server's own
+  directories, via `workdir.Resolver.LocalPath` — before `ws.ReadFile` and
+  before `Build` looks for any page. A workspace passes `CheckBeneath` but can
+  still contain a `.env`, this server's config directory or the file a link in
+  `~/.ssh` leads to: read as the manifest it came back in a parse error, named
+  as a page it was handed to ffmpeg, and "missing" against those said whether
+  it exists (ADR-0009, amendment v0.6.1). `TestExistenceIsNotRevealed`
+  compares the whole answer for a path with and without its file; three
+  mutations are caught by assertion.
 - **Symlink vs missing** — `VerifyRegular` returns `path_not_allowed` for a
   symlink/non-regular entry (surfaced immediately) but a plain lstat error for a
   missing file (collected → `manifest_incomplete`). Do not collapse the two.

@@ -11,6 +11,8 @@ import (
 	"github.com/nlink-jp/video-studio-mcp/internal/master"
 	"github.com/nlink-jp/video-studio-mcp/internal/mcpserver"
 	"github.com/nlink-jp/video-studio-mcp/internal/toolerr"
+	"github.com/nlink-jp/video-studio-mcp/internal/workdir"
+	"github.com/nlink-jp/video-studio-mcp/internal/workspace"
 )
 
 func registerMaster(srv *mcpserver.Server, d *Deps) {
@@ -107,6 +109,9 @@ func registerMaster(srv *mcpserver.Server, d *Deps) {
 		if err != nil {
 			return nil, err
 		}
+		if err := refused(ws, d.WorkDir, manRel); err != nil {
+			return nil, err
+		}
 		data, err := ws.ReadFile(manRel)
 		if err != nil {
 			return nil, toolerr.Newf(toolerr.CodeInvalidManifest, "read manifest %q: %v", in.ManifestPath, err)
@@ -114,6 +119,19 @@ func registerMaster(srv *mcpserver.Server, d *Deps) {
 		pages, err := manifest.Parse(data)
 		if err != nil {
 			return nil, err
+		}
+		// Every image and audio the manifest names is judged here, before
+		// the render looks for any of them or hands one to ffmpeg.
+		for _, p := range pages {
+			for _, name := range []string{p.Image, p.Audio} {
+				rel, err := ws.ResolveInside(name)
+				if err != nil {
+					return nil, err
+				}
+				if err := refused(ws, d.WorkDir, rel); err != nil {
+					return nil, err
+				}
+			}
 		}
 
 		stem := strings.TrimSuffix(filepath.Base(in.ManifestPath), filepath.Ext(in.ManifestPath))
@@ -140,4 +158,20 @@ func registerMaster(srv *mcpserver.Server, d *Deps) {
 
 		return m.Build(ctx, ws, stem, pages, opts)
 	})
+}
+
+// refused judges a file the caller names in the workspace — the floor,
+// pathguard's Local policy with this server's own directories — before
+// anything reads it or asks whether it is there. The workspace passed
+// CheckBeneath, but it may contain such a place (a .env, this server's config
+// directory, the file a link in ~/.ssh leads to): read as the manifest it came
+// back in a parse error, named as a page it was handed to ffmpeg, and "not
+// found" against those said which of them exist. Every caller-named read goes
+// through here: the manifest and each page's image and audio.
+func refused(ws *workspace.Workspace, wd workdir.Resolver, rel string) error {
+	abs := ws.Path(rel)
+	if why := wd.LocalPath(abs, abs); why != "" {
+		return toolerr.Newf(toolerr.CodePathNotAllowed, "%q is refused: %s", rel, why)
+	}
+	return nil
 }

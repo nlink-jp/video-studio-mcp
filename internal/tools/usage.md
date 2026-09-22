@@ -38,6 +38,10 @@ output/            rendered mp4 + tmp    (server-written)
   `path_not_allowed`). The workspace directory itself must be a real directory:
   if `<work_dir>/<workspace_id>` is a symlink, the call is refused with
   `path_not_allowed` rather than run against the link's target.
+- A manifest, image or audio that is a `.env`, lies in this server's config
+  directory, or is where a link directly inside a credential directory points
+  is refused with `path_not_allowed` before it is read, whether or not it
+  exists.
 
 ## Render flow
 
@@ -125,7 +129,7 @@ them (debugging).
 | ffmpeg_failed | inspect details.stderr_tail; a bad image/audio input → fix that page, retry |
 | probe_failed | the page audio is unreadable by ffprobe; re-supply that audio file |
 | caption_failed | a caption could not be rendered; check the `[caption]` config (e.g. font_color/box_color) |
-| path_not_allowed | use workspace-relative asset paths; symlinks out of the workspace are rejected |
+| path_not_allowed | use workspace-relative asset paths; symlinks out of the workspace are rejected, and so is a manifest, image or audio that is a `.env`, lies in this server's config directory, or is where a link directly inside a credential directory points (whether or not it exists) |
 | work_dir_required | no `work_dir` argument and no `_meta` hint — pass the absolute path of a directory you can read back |
 | work_dir_invalid | not absolute, started with `~`, or contained `..` |
 | work_dir_not_found | not there, or not a directory — it is yours, so this is a typo; the server does not create it |

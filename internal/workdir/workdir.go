@@ -82,6 +82,16 @@ func (r Resolver) Validate(dir string) (string, error) {
 // makes or uses a workspace.
 func (r Resolver) CheckBeneath(dir string) error { return toolErr(r.r.CheckBeneath(dir)) }
 
+// LocalPath reports why a file a call names may not be read — pathguard's
+// Local policy plus this server's own directories — or "" when it may. A
+// workspace passed CheckBeneath, but it may still contain such a place: a
+// .env, this server's config directory, the file a link in ~/.ssh leads to.
+// pathguard follows the links on the path itself; pass the path twice.
+func (r Resolver) LocalPath(raw, resolved string) string {
+	_, why := r.r.LocalPath(raw, resolved)
+	return why
+}
+
 // toolErr carries a pathguard refusal onto toolerr with the same code,
 // message and details; any other error passes through.
 func toolErr(err error) error {
