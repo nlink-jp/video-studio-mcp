@@ -47,6 +47,14 @@ gem-agent・lagent と同じものを 1 つ持つ。
 
 写しを持たないので、判定の修正は pathguard のリリースと、ここでの依存の更新 1 行になる。
 
+## Amendment (2026-09-22): 実際に使うディレクトリも判定する
+
+`work_dir` だけを検査していたので、`work_dir=~/.config` と `workspace_id=gh` でワークスペースが `~/.config/gh` になり、
+動画とその素材がそこへ書かれた。ADR-0008 の頃からの穴で、image-forge の独立レビューで見つかった。
+`workspace.NewManager(check)` は判定を必須の引数として受け取り、`EnsureUnder` は `<work_dir>/<workspace_id>` を
+作る前・使う前に `workdir.Resolver.CheckBeneath`（pathguard v0.2.0）で判定する。配線は `newToolDeps`。判定の無い
+Manager はすべてのワークスペースを拒む。pathguard v0.2.0 は NUL バイトを含むパスも拒む。
+
 ## References
 
 - 組織 ADR-021（ファイル渡し MCP サーバーの work dir 契約）

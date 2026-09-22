@@ -23,6 +23,16 @@ All notable changes to this project are documented here. The format follows
   `$HOME` names another, in Linux `/etc`, and whenever the home directory cannot
   be determined. `work_dir_denied` carries `reason` in its `details`.
 
+### Security
+
+- **The workspace directory is judged, not only `work_dir`.** `work_dir=~/.config`
+  with `workspace_id=gh` made the workspace `~/.config/gh`, a credential
+  directory, and the rendered video and its segments were written into it.
+  `<work_dir>/<workspace_id>` is now refused with `work_dir_denied` wherever
+  `work_dir` itself would be. The hole was present since the work-directory
+  contract (ADR-0008).
+- A path holding a NUL byte is refused (pathguard v0.2.0).
+
 ### Fixed
 
 - **`make verify-release` now fails closed.** Its last block chained unzip, the

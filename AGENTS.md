@@ -131,6 +131,11 @@ Never `go build` directly — always `make build` (outputs to `dist/`).
   `serverOwnedDirs()`. A zero `workdir.Resolver{}` refuses every call, and so
   does an empty server directory — tests build one with
   `workdir.NewResolver(t.TempDir())`.
+- **The workspace directory is judged too.** `workspace.NewManager(check)`
+  takes `workdir.Resolver.CheckBeneath`, and `EnsureUnder` judges
+  `<work_dir>/<workspace_id>` before making it — `work_dir=~/.config` with
+  `workspace_id=gh` is `~/.config/gh`. `newToolDeps` wires both; a Manager
+  without a check refuses every workspace.
 
 ## ADR cheat sheet
 
