@@ -41,6 +41,12 @@ Never `go build` directly — always `make build` (outputs to `dist/`).
 - `internal/master/` — the render pipeline: pure ffmpeg/ffprobe arg builders
   (`segmentArgs`, `concatArgs`, `probeArgs`, `concatList`) + `Runner` interface
   (faked in tests); `Build` orchestrates probe → per-page segment → concat.
+  Every input a caller can supply is opened with its format pinned
+  (`imageInput`: image2, no pattern; `audioInput`/`probeArgs`: the
+  `audioFormats` whitelist, never concat or HLS; `-protocol_whitelist file`) —
+  ffmpeg picks a format from the contents, and a page holding an ffconcat list
+  was followed outside the workspace (ADR-0009, v0.6.2). A new input goes
+  through these helpers.
 - `internal/job/` — in-memory background-render jobs (one render per job);
   progress + result/error tracking; NOT persisted (`job_not_found` on restart).
 - `internal/caption/` — renders a caption string to a transparent canvas-sized

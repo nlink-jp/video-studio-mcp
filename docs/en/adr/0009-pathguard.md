@@ -125,6 +125,27 @@ existed).
   this breaks containment, not the floor); and the lists the server writes for ffmpeg (concat,
   chapters, captions) are not verified again before the spawn.
 
+## Amendment (2026-09-22, v0.6.2): pin ffmpeg's input formats — accept the rest
+
+The "not closed here" items above were taken up after measuring them with a real ffmpeg (9.0.2, fake files in a
+scratch directory).
+
+- **Measured:** ffmpeg followed a page whose contents were an ffconcat list (named `.wav`, `file 'k'`, k an
+  in-workspace link leading outside), and the outside file's audio went into the output. An ffconcat naming an
+  absolute path is refused by ffmpeg's default `safe`, and HLS in a file named `.wav` is not treated as HLS.
+- **Fixed:** images and caption images are read as `image2` with no pattern (a `%` is a name too); audio and ffprobe
+  take a whitelist of audio formats only (wav, mp3, mov/mp4/m4a, flac, ogg, aac, matroska/webm, aiff — neither a
+  concat list nor a playlist); only the `file` protocol is allowed. With the server's own argument shape, every
+  accepted format (PNG/JPG × wav, mp3, m4a, flac, aiff, opus, webm, mka, aac) still renders and the crafted file is
+  refused as "not on whitelist". A path holding a control character is not written into the concat list (a newline
+  would end the entry and add one of its own to a list read with `-safe 0`).
+- **Accepted residuals** (the operator's rule: an overall risk assessment rather than perfection): the workspace
+  directory swapped for a link during a render; the lists the server writes (concat, chapters, captions) not
+  re-verified right before the spawn; writes not judged (`WriteFileAtomic` follows a directory link planted in the
+  workspace; an `output_name` of `.env` becomes `.env.mp4`). Each needs precise timing or a link planted inside the
+  workspace, and what gets written is only the server's own name and content.
+- pathguard is at v0.3.0 (no behaviour change for this server).
+
 ## References
 
 - Organization ADR-021 (the work-dir contract of the file-mediated MCP servers)

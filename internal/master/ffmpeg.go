@@ -25,23 +25,41 @@ import (
 // neighbouring page — so the segment keeps its exact length and the final
 // concat stays a stream copy (ADR-0007). The fades are appended after the
 // caption overlay so a burned-in caption fades with its page.
+// Inputs are opened with their format pinned (2026-09-22). ffmpeg picks an
+// input's format from its contents, so a page file whose contents were a
+// playlist was followed to whatever it named — measured with ffmpeg 9.0.2: a
+// ".wav" holding "ffconcat version 1.0\nfile 'k'", k an in-workspace link to a
+// file outside the workspace, put that file's audio into the output. An image
+// is read as one image (image2, no pattern, so a "%" is a name too); audio may
+// be any audio format but never a playlist; only the file protocol is allowed.
+const audioFormats = "wav,mp3,mov,mp4,m4a,3gp,3g2,mj2,flac,ogg,aac,matroska,webm,aiff"
+
+func imageInput(path string, loop bool) []string {
+	args := []string{"-f", "image2", "-pattern_type", "none"}
+	if loop {
+		args = append(args, "-loop", "1")
+	}
+	return append(args, "-protocol_whitelist", "file", "-i", path)
+}
+
+func audioInput(path string) []string {
+	return []string{"-format_whitelist", audioFormats, "-protocol_whitelist", "file", "-i", path}
+}
+
 func segmentArgs(v config.VideoConfig, imgPath, audioPath, capPath string, durSec, fadeIn, fadeOut float64, outPath string) []string {
 	scalePad := fmt.Sprintf(
 		"scale=%d:%d:force_original_aspect_ratio=decrease,pad=%d:%d:(ow-iw)/2:(oh-ih)/2:%s,setsar=1,fps=%d",
 		v.Width, v.Height, v.Width, v.Height, v.Background, v.FPS,
 	)
 	fades := fadeFilters(v.Background, durSec, fadeIn, fadeOut)
-	args := []string{
-		"-y",
-		"-loop", "1",
-		"-i", imgPath,
-		"-i", audioPath,
-	}
+	args := []string{"-y"}
+	args = append(args, imageInput(imgPath, true)...)
+	args = append(args, audioInput(audioPath)...)
 	if capPath == "" {
 		args = append(args, "-t", fmt.Sprintf("%.3f", durSec), "-vf", scalePad+fades)
 	} else {
+		args = append(args, imageInput(capPath, false)...)
 		args = append(args,
-			"-i", capPath,
 			"-t", fmt.Sprintf("%.3f", durSec),
 			"-filter_complex", "[0:v]"+scalePad+"[bg];[bg][2:v]overlay=0:0:format=auto"+fades+"[v]",
 			"-map", "[v]",
@@ -203,6 +221,8 @@ func escapeMetadataValue(s string) string {
 func probeArgs(audioPath string) []string {
 	return []string{
 		"-v", "error",
+		"-format_whitelist", audioFormats,
+		"-protocol_whitelist", "file",
 		"-show_entries", "format=duration",
 		"-of", "default=noprint_wrappers=1:nokey=1",
 		audioPath,
@@ -210,13 +230,19 @@ func probeArgs(audioPath string) []string {
 }
 
 // concatList renders the concat demuxer input file. Single quotes inside paths
-// are escaped per the ffmpeg concat demuxer quoting rules.
-func concatList(paths []string) string {
+// are escaped per the ffmpeg concat demuxer quoting rules. A path holding a
+// control character is refused: a newline ends the entry, so a work_dir named
+// "A\nfile /etc/hosts\n#" would add an entry of its own to a list read with
+// -safe 0.
+func concatList(paths []string) (string, error) {
 	var b strings.Builder
 	for _, p := range paths {
+		if strings.ContainsFunc(p, func(r rune) bool { return r < ' ' || r == 0x7f }) {
+			return "", fmt.Errorf("path %q holds a control character and cannot be written into ffmpeg's concat list", p)
+		}
 		b.WriteString("file '")
 		b.WriteString(strings.ReplaceAll(p, "'", `'\''`))
 		b.WriteString("'\n")
 	}
-	return b.String()
+	return b.String(), nil
 }

@@ -222,7 +222,11 @@ func (m *Master) Build(ctx context.Context, ws *workspace.Workspace, manifestSte
 		segPaths = append(segPaths, ws.Path(rel))
 	}
 	listRel := filepath.Join(tmpRel, "concat.txt")
-	if err := ws.WriteFileAtomic(listRel, []byte(concatList(segPaths))); err != nil {
+	list, err := concatList(segPaths)
+	if err != nil {
+		return Result{}, toolerr.New(toolerr.CodePathNotAllowed, err.Error())
+	}
+	if err := ws.WriteFileAtomic(listRel, []byte(list)); err != nil {
 		return Result{}, err
 	}
 

@@ -223,9 +223,45 @@ func TestBuildFFmpegNotFound(t *testing.T) {
 }
 
 func TestConcatListQuoting(t *testing.T) {
-	got := concatList([]string{"/a/it's.mp4"})
-	if got != "file '/a/it'\\''s.mp4'\n" {
-		t.Errorf("quoting: %q", got)
+	got, err := concatList([]string{"/a/it's.mp4"})
+	if err != nil || got != "file '/a/it'\\''s.mp4'\n" {
+		t.Errorf("quoting: %q, %v", got, err)
+	}
+}
+
+// A newline in a path would end its entry and start one of the path's own
+// making; any control character is refused.
+func TestConcatListRefusesControlCharacters(t *testing.T) {
+	for _, p := range []string{"/w/A\nfile /etc/hosts\n#/seg.mp4", "/w/a\rb.mp4", "/w/a\x00b.mp4"} {
+		if _, err := concatList([]string{p}); err == nil {
+			t.Errorf("concatList(%q) accepted a control character", p)
+		}
+	}
+}
+
+// Every input is opened with its format pinned: a page file whose contents
+// are a playlist must not be followed (measured with ffmpeg 9.0.2).
+func TestInputsAreOpenedWithTheirFormatPinned(t *testing.T) {
+	v := config.Default().Video
+	for _, capPath := range []string{"", "/c.png"} {
+		args := strings.Join(segmentArgs(v, "/i.png", "/a.wav", capPath, 1.0, 0, 0, "/o.mp4"), " ")
+		for _, want := range []string{
+			"-f image2 -pattern_type none -loop 1 -protocol_whitelist file -i /i.png",
+			"-format_whitelist " + audioFormats + " -protocol_whitelist file -i /a.wav",
+		} {
+			if !strings.Contains(args, want) {
+				t.Errorf("segment (caption %q) lacks %q: %s", capPath, want, args)
+			}
+		}
+		if capPath != "" && !strings.Contains(args, "-f image2 -pattern_type none -protocol_whitelist file -i /c.png") {
+			t.Errorf("caption input not pinned: %s", args)
+		}
+	}
+	if probe := strings.Join(probeArgs("/a.wav"), " "); !strings.Contains(probe, "-format_whitelist "+audioFormats+" -protocol_whitelist file") {
+		t.Errorf("ffprobe input not pinned: %s", probe)
+	}
+	if strings.Contains(audioFormats, "concat") || strings.Contains(audioFormats, "hls") {
+		t.Errorf("the audio whitelist admits a playlist format: %s", audioFormats)
 	}
 }
 

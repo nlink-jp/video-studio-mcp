@@ -178,7 +178,8 @@ restart (an unknown `job_id` returns `job_not_found` — just re-run `master`).
 
 - `image` (required) — workspace-relative still image (PNG/JPG).
 - `audio` (required) — workspace-relative narration audio; its duration sets the
-  page's on-screen time.
+  page's on-screen time. WAV, MP3, M4A/MP4, FLAC, Ogg/Opus, AAC, WebM/MKA or
+  AIFF; a file whose contents are a playlist or a concat list is refused.
 - `title` (optional) — the page's **chapter-marker** name (default `Page N`).
 - `caption` (optional) — subtitle text **burned into the video** when `master`
   is called with `captions: true` (ignored otherwise).

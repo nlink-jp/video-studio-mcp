@@ -4,6 +4,24 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Security
+
+- **A page file whose contents were a playlist was followed.** ffmpeg picks an
+  input's format from its contents, so a page named `.wav` holding an ffconcat
+  list that named an in-workspace link put the linked file — outside the
+  workspace — into the output (measured with ffmpeg 9.0.2). Inputs are now
+  opened with their format pinned: images as single images, audio (and
+  ffprobe) from a whitelist of audio formats only, the `file` protocol only.
+  Every accepted format still renders (measured).
+- A path holding a control character is no longer written into ffmpeg's concat
+  list (a newline would add an entry of its own).
+
+### Changed
+
+- nlink-jp/pathguard v0.3.0.
+
 ## [0.6.1] - 2026-09-22
 
 ### Security

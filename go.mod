@@ -4,7 +4,7 @@ go 1.25
 
 require (
 	github.com/BurntSushi/toml v1.6.0
-	github.com/nlink-jp/pathguard v0.2.0
+	github.com/nlink-jp/pathguard v0.3.0
 	github.com/spf13/cobra v1.8.1
 	golang.org/x/image v0.29.0
 )
