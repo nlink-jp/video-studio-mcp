@@ -22,6 +22,7 @@ package workspace
 import (
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -168,6 +169,74 @@ func (w *Workspace) WriteFileAtomic(rel string, data []byte) error {
 		return w.rootErr("rename", rel, err)
 	}
 	return nil
+}
+
+// PlaceFile copies src — a file the server rendered in a private directory
+// outside the workspace — to the workspace-relative rel, fully inside the
+// containment root. It is written under a temporary name created exclusively
+// and then renamed, so an entry already at rel (a planted symlink included) is
+// replaced, never written through, and no path component may lead out. ffmpeg
+// cannot inherit os.Root, so it never writes into the workspace itself.
+func (w *Workspace) PlaceFile(rel, src string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return toolerr.Newf(toolerr.CodeWorkspaceFailed, "open rendered file: %v", err)
+	}
+	defer func() { _ = in.Close() }()
+	r, err := w.openRoot()
+	if err != nil {
+		return err
+	}
+	defer r.Close()
+	if dir := filepath.Dir(rel); dir != "." {
+		if err := r.MkdirAll(dir, 0o755); err != nil {
+			if errors.Is(err, fs.ErrExist) {
+				return toolerr.Newf(toolerr.CodePathNotAllowed,
+					"mkdir %q: a path component is not a real directory (symlink?)", dir)
+			}
+			return w.rootErr("mkdir", dir, err)
+		}
+	}
+	tmp := rel + ".tmp"
+	_ = r.Remove(tmp) // an entry planted at the temporary name is unlinked, not followed
+	out, err := r.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	if err != nil {
+		return w.rootErr("write", tmp, err)
+	}
+	_, cerr := io.Copy(out, in)
+	if err := errors.Join(cerr, out.Close()); err != nil {
+		_ = r.Remove(tmp)
+		return toolerr.Newf(toolerr.CodeWorkspaceFailed, "write %q: %v", rel, err)
+	}
+	if err := r.Rename(tmp, rel); err != nil {
+		_ = r.Remove(tmp)
+		return w.rootErr("rename", rel, err)
+	}
+	return nil
+}
+
+// Head returns up to n leading bytes of a workspace-relative file, judged and
+// read inside the containment root — enough to tell an image's real format.
+func (w *Workspace) Head(rel string, n int) ([]byte, error) {
+	if err := w.Judge(rel); err != nil {
+		return nil, err
+	}
+	r, err := w.openRoot()
+	if err != nil {
+		return nil, err
+	}
+	defer r.Close()
+	f, err := r.Open(rel)
+	if err != nil {
+		return nil, w.rootErr("open", rel, err)
+	}
+	defer func() { _ = f.Close() }()
+	buf := make([]byte, n)
+	k, err := io.ReadFull(f, buf)
+	if err != nil && !errors.Is(err, io.ErrUnexpectedEOF) && !errors.Is(err, io.EOF) {
+		return nil, w.rootErr("read", rel, err)
+	}
+	return buf[:k], nil
 }
 
 // Stat stats a workspace-relative path with symlink containment.

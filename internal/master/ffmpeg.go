@@ -32,33 +32,51 @@ import (
 // file outside the workspace, put that file's audio into the output. An image
 // is read as one image (image2, no pattern, so a "%" is a name too); audio may
 // be any audio format but never a playlist; only the file protocol is allowed.
-const audioFormats = "wav,mp3,mov,mp4,m4a,3gp,3g2,mj2,flac,ogg,aac,matroska,webm,aiff"
+const audioFormats = "wav,mp3,mov,mp4,m4a,3gp,3g2,mj2,flac,ogg,aac,matroska,webm,aiff,caf,w64,au,ac3,asf"
 
-func imageInput(path string, loop bool) []string {
+// imageInput opens path as one image. codec is the decoder the file's own
+// bytes call for (imageCodec): image2 otherwise picks it from the extension,
+// and a JPEG named .png then fails on every looped frame and never ends.
+func imageInput(path, codec string, loop bool) []string {
 	args := []string{"-f", "image2", "-pattern_type", "none"}
 	if loop {
 		args = append(args, "-loop", "1")
 	}
+	if codec != "" {
+		args = append(args, "-c:v", codec)
+	}
 	return append(args, "-protocol_whitelist", "file", "-i", path)
+}
+
+// imageCodec names the decoder for an image by its leading bytes, or "" to
+// leave it to the extension (BMP, TIFF and the rest image2 reads by name).
+func imageCodec(head []byte) string {
+	switch {
+	case len(head) >= 8 && string(head[:8]) == "\x89PNG\r\n\x1a\n":
+		return "png"
+	case len(head) >= 3 && head[0] == 0xFF && head[1] == 0xD8 && head[2] == 0xFF:
+		return "mjpeg"
+	}
+	return ""
 }
 
 func audioInput(path string) []string {
 	return []string{"-format_whitelist", audioFormats, "-protocol_whitelist", "file", "-i", path}
 }
 
-func segmentArgs(v config.VideoConfig, imgPath, audioPath, capPath string, durSec, fadeIn, fadeOut float64, outPath string) []string {
+func segmentArgs(v config.VideoConfig, imgPath, imgCodec, audioPath, capPath string, durSec, fadeIn, fadeOut float64, outPath string) []string {
 	scalePad := fmt.Sprintf(
 		"scale=%d:%d:force_original_aspect_ratio=decrease,pad=%d:%d:(ow-iw)/2:(oh-ih)/2:%s,setsar=1,fps=%d",
 		v.Width, v.Height, v.Width, v.Height, v.Background, v.FPS,
 	)
 	fades := fadeFilters(v.Background, durSec, fadeIn, fadeOut)
 	args := []string{"-y"}
-	args = append(args, imageInput(imgPath, true)...)
+	args = append(args, imageInput(imgPath, imgCodec, true)...)
 	args = append(args, audioInput(audioPath)...)
 	if capPath == "" {
 		args = append(args, "-t", fmt.Sprintf("%.3f", durSec), "-vf", scalePad+fades)
 	} else {
-		args = append(args, imageInput(capPath, false)...)
+		args = append(args, imageInput(capPath, "png", false)...)
 		args = append(args,
 			"-t", fmt.Sprintf("%.3f", durSec),
 			"-filter_complex", "[0:v]"+scalePad+"[bg];[bg][2:v]overlay=0:0:format=auto"+fades+"[v]",

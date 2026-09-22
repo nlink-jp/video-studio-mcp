@@ -123,8 +123,10 @@ The canvas defaults to the server's `[video]` config (1920×1080). Override it
 per render with `width`/`height`/`fps` (even dimensions ≥16) to produce the same
 deck as **16:9** (1920×1080), **9:16** vertical (1080×1920), or **1:1**
 (1080×1080) — useful for social distribution. Images are always
-letter/pillar-boxed to fit. The per-page intermediates under `output/tmp` are
-discarded after a successful render (`keep_intermediates: true` to keep them).
+letter/pillar-boxed to fit. The per-page intermediates are made in a private
+directory outside the workspace and discarded (`keep_intermediates: true`
+copies them into `output/tmp`); only the finished MP4 is placed in the
+workspace, so a file changed there during a render cannot steer ffmpeg.
 
 ### Captions
 

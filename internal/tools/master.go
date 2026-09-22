@@ -36,7 +36,7 @@ func registerMaster(srv *mcpserver.Server, d *Deps) {
     "height": {"type": "integer", "description": "Override the output canvas height (even, >=16) for this render. Default: server [video] config."},
     "fps": {"type": "integer", "description": "Override the output frame rate (>=1) for this render. Default: server [video] config."},
     "fade_seconds": {"type": "number", "description": "Length of one fade at a page boundary whose manifest \"transition\" is \"fade\" (default: server [video] config, 0.5). The fade dips to the canvas background inside each page's own duration, so total duration and chapter timing are unaffected; it is clamped so at least half of every page stays at full brightness. 0 disables fading (every boundary becomes a cut)."},
-    "keep_intermediates": {"type": "boolean", "description": "Keep the per-page segments and caption PNGs under output/tmp after a successful render (default false = discard)."},
+    "keep_intermediates": {"type": "boolean", "description": "Copy the per-page segments, caption PNGs and ffmpeg's lists into output/tmp; they are made outside the workspace (default false = discard)."},
     "async": {"type": "boolean", "description": "Render in the background and return a job_id immediately (default false); poll check_job for progress and the result. Use for long decks that would otherwise block the call."}
   },
   "additionalProperties": false

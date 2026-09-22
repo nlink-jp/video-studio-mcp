@@ -120,9 +120,10 @@ one render (dimensions must be even and ≥16). Produce the same deck as `16:9`
 server config. Images are always letter/pillar-boxed to fit, so mixed source
 sizes never distort.
 
-**Intermediates**: the per-page segments and caption PNGs under `output/tmp`
-are discarded after a successful render. Pass `keep_intermediates: true` to keep
-them (debugging).
+**Intermediates**: the per-page segments, caption PNGs and ffmpeg's lists are
+made in a private directory outside the workspace and discarded. Pass
+`keep_intermediates: true` to have them copied into `output/tmp` (debugging;
+on success and on failure).
 
 ## Error recovery
 

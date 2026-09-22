@@ -46,7 +46,12 @@ Never `go build` directly — always `make build` (outputs to `dist/`).
   `audioFormats` whitelist, never concat or HLS; `-protocol_whitelist file`) —
   ffmpeg picks a format from the contents, and a page holding an ffconcat list
   was followed outside the workspace (ADR-0009, v0.6.2). A new input goes
-  through these helpers.
+  through these helpers. **Nothing ffmpeg writes or reads back lives in the
+  workspace**: `Build` makes a private directory per render (`os.MkdirTemp`)
+  for captions, segments, lists and the master, and places only the master
+  through the workspace root (`Workspace.PlaceFile`); a caller writing into the
+  workspace during a render took the output 10 of 10 times when the concat list
+  lived there. The image decoder comes from the file's bytes (`imageCodec`).
 - `internal/job/` — in-memory background-render jobs (one render per job);
   progress + result/error tracking; NOT persisted (`job_not_found` on restart).
 - `internal/caption/` — renders a caption string to a transparent canvas-sized

@@ -8,18 +8,29 @@ All notable changes to this project are documented here. The format follows
 
 ### Security
 
-- **A page file whose contents were a playlist was followed.** ffmpeg picks an
-  input's format from its contents, so a page named `.wav` holding an ffconcat
-  list that named an in-workspace link put the linked file — outside the
-  workspace — into the output (measured with ffmpeg 9.0.2). Inputs are now
+- **Files in the workspace could steer ffmpeg outside it.** A page whose
+  contents were an ffconcat list naming an in-workspace link put the outside
+  file into the output; and a caller writing into the workspace during a
+  render could rewrite the concat list (10 of 10 runs), swap a segment for a
+  list, or plant a link where ffmpeg wrote a segment or the master — ffmpeg
+  then overwrote the link's target (measured with ffmpeg 9.0.2). Everything
+  ffmpeg writes and reads back now lives in a private directory outside the
+  workspace, and only the finished MP4 is placed in the workspace through its
+  root (a link at its name is replaced, not followed). The page inputs are
   opened with their format pinned: images as single images, audio (and
   ffprobe) from a whitelist of audio formats only, the `file` protocol only.
-  Every accepted format still renders (measured).
 - A path holding a control character is no longer written into ffmpeg's concat
   list (a newline would add an entry of its own).
 
 ### Changed
 
+- `keep_intermediates` copies the intermediates into `output/tmp` (on success
+  and on failure); without it nothing is left there, including after a failed
+  render.
+- Page audio is accepted in these formats: WAV, MP3, M4A/MP4, FLAC, Ogg/Opus,
+  AAC, WebM/MKA, AIFF, CAF, W64, AU, AC3 and WMA. A file whose contents are a
+  playlist or a concat list is refused.
+- An image's decoder comes from its own bytes, so a JPEG named `.png` renders.
 - nlink-jp/pathguard v0.3.0.
 
 ## [0.6.1] - 2026-09-22

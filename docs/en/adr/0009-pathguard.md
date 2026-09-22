@@ -125,26 +125,33 @@ existed).
   this breaks containment, not the floor); and the lists the server writes for ffmpeg (concat,
   chapters, captions) are not verified again before the spawn.
 
-## Amendment (2026-09-22, v0.6.2): pin ffmpeg's input formats — accept the rest
+## Amendment (2026-09-22, v0.6.2): what ffmpeg writes and reads back moves out of the workspace; inputs have their format pinned
 
 The "not closed here" items above were taken up after measuring them with a real ffmpeg (9.0.2, fake files in a
 scratch directory).
 
 - **Measured:** ffmpeg followed a page whose contents were an ffconcat list (named `.wav`, `file 'k'`, k an
-  in-workspace link leading outside), and the outside file's audio went into the output. An ffconcat naming an
-  absolute path is refused by ffmpeg's default `safe`, and HLS in a file named `.wav` is not treated as HLS.
-- **Fixed:** images and caption images are read as `image2` with no pattern (a `%` is a name too); audio and ffprobe
-  take a whitelist of audio formats only (wav, mp3, mov/mp4/m4a, flac, ogg, aac, matroska/webm, aiff — neither a
-  concat list nor a playlist); only the `file` protocol is allowed. With the server's own argument shape, every
-  accepted format (PNG/JPG × wav, mp3, m4a, flac, aiff, opus, webm, mka, aac) still renders and the crafted file is
-  refused as "not on whitelist". A path holding a control character is not written into the concat list (a newline
-  would end the entry and add one of its own to a list read with `-safe 0`).
-- **Accepted residuals** (the operator's rule: an overall risk assessment rather than perfection): the workspace
-  directory swapped for a link during a render; the lists the server writes (concat, chapters, captions) not
-  re-verified right before the spawn; writes not judged (`WriteFileAtomic` follows a directory link planted in the
-  workspace; an `output_name` of `.env` becomes `.env.mp4`). Each needs precise timing or a link planted inside the
-  workspace, and what gets written is only the server's own name and content.
-- pathguard is at v0.3.0 (no behaviour change for this server).
+  in-workspace link leading outside), and the outside file's audio went into the output. The independent review then
+  measured more: a caller rewriting the workspace's concat list during a render made the outside file the output in
+  10 of 10 runs (ffmpeg's startup is tens of milliseconds, easy to aim for — the earlier "needs precise timing" was
+  wrong); a segment replaced by an ffconcat list was followed by the final concat; and a link planted at a segment's
+  or the output's name had its target overwritten by ffmpeg. The precondition is a caller that can keep writing into
+  the workspace during a render (a code runner with the workspace mounted, say).
+- **Fixed at the cause:** everything ffmpeg writes and reads back — caption PNGs, segments, the concat list, chapters,
+  subtitles, and the master until it is placed — lives in a private directory made per render outside the workspace
+  under an unguessable name (0700). Only the master is placed, through the workspace's `os.Root`, under a temporary
+  name and then renamed, so a link at its name is replaced rather than followed and a component leading out is
+  refused. `keep_intermediates` copies the intermediates into `output/tmp` the same way (on success and on failure).
+- **Inputs pinned:** only the page inputs are read from the workspace. An image is read as `image2` with no pattern (a
+  `%` is a name too), its decoder chosen from the file's leading bytes (by extension, a JPEG named `.png` never
+  finished); audio and ffprobe take a whitelist of audio formats only (wav, mp3, mov/mp4/m4a, flac, ogg, aac,
+  matroska/webm, aiff, caf, w64, au, ac3, asf — neither a concat list nor a playlist); only the `file` protocol. With
+  the server's own argument shape, the accepted formats render and the crafted file is refused as "not on whitelist".
+  A path holding a control character is not written into the concat list.
+- **Accepted residuals** (the operator's rule: an overall risk assessment rather than perfection): a page input
+  swapped for a link to outside between its judgement and ffmpeg's open can be read — but with the format pinned only
+  an image or audio that parses as that format is, never a credential file. A corrupt image still makes ffmpeg run
+  without end (older than this change). pathguard is at v0.3.0 (no behaviour change for this server).
 
 ## References
 

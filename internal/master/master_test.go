@@ -122,7 +122,7 @@ func TestBuild(t *testing.T) {
 		}
 	}
 	concat := strings.Join(fr.cmds[4], " ")
-	for _, want := range []string{"-f concat", "-safe 0", "-c copy", "deck.mp4"} {
+	for _, want := range []string{"-f concat", "-safe 0", "-c copy"} {
 		if !strings.Contains(concat, want) {
 			t.Errorf("concat args missing %q: %s", want, concat)
 		}
@@ -244,7 +244,7 @@ func TestConcatListRefusesControlCharacters(t *testing.T) {
 func TestInputsAreOpenedWithTheirFormatPinned(t *testing.T) {
 	v := config.Default().Video
 	for _, capPath := range []string{"", "/c.png"} {
-		args := strings.Join(segmentArgs(v, "/i.png", "/a.wav", capPath, 1.0, 0, 0, "/o.mp4"), " ")
+		args := strings.Join(segmentArgs(v, "/i.png", "", "/a.wav", capPath, 1.0, 0, 0, "/o.mp4"), " ")
 		for _, want := range []string{
 			"-f image2 -pattern_type none -loop 1 -protocol_whitelist file -i /i.png",
 			"-format_whitelist " + audioFormats + " -protocol_whitelist file -i /a.wav",
@@ -253,7 +253,7 @@ func TestInputsAreOpenedWithTheirFormatPinned(t *testing.T) {
 				t.Errorf("segment (caption %q) lacks %q: %s", capPath, want, args)
 			}
 		}
-		if capPath != "" && !strings.Contains(args, "-f image2 -pattern_type none -protocol_whitelist file -i /c.png") {
+		if capPath != "" && !strings.Contains(args, "-f image2 -pattern_type none -c:v png -protocol_whitelist file -i /c.png") {
 			t.Errorf("caption input not pinned: %s", args)
 		}
 	}
@@ -268,7 +268,7 @@ func TestInputsAreOpenedWithTheirFormatPinned(t *testing.T) {
 func TestSegmentArgsPadColor(t *testing.T) {
 	v := config.Default().Video
 	v.Background = "white"
-	args := strings.Join(segmentArgs(v, "/i.png", "/a.wav", "", 1.25, 0, 0, "/o.mp4"), " ")
+	args := strings.Join(segmentArgs(v, "/i.png", "", "/a.wav", "", 1.25, 0, 0, "/o.mp4"), " ")
 	if !strings.Contains(args, "pad=1920:1080:(ow-iw)/2:(oh-ih)/2:white") {
 		t.Errorf("pad color not applied: %s", args)
 	}
@@ -282,7 +282,7 @@ func TestSegmentArgsPadColor(t *testing.T) {
 
 func TestSegmentArgsCaptionOverlay(t *testing.T) {
 	v := config.Default().Video
-	args := strings.Join(segmentArgs(v, "/i.png", "/a.wav", "/c.png", 1.0, 0, 0, "/o.mp4"), " ")
+	args := strings.Join(segmentArgs(v, "/i.png", "", "/a.wav", "/c.png", 1.0, 0, 0, "/o.mp4"), " ")
 	for _, want := range []string{"-i /c.png", "-filter_complex", "overlay=0:0", "-map [v]", "-map 1:a"} {
 		if !strings.Contains(args, want) {
 			t.Errorf("caption segment missing %q: %s", want, args)
@@ -327,7 +327,7 @@ func TestSegmentArgsFade(t *testing.T) {
 	v.Background = "white"
 
 	// A fade-out starts at durSec-fadeOut and dips to the canvas background.
-	args := strings.Join(segmentArgs(v, "/i.png", "/a.wav", "", 4.0, 0.5, 0.5, "/o.mp4"), " ")
+	args := strings.Join(segmentArgs(v, "/i.png", "", "/a.wav", "", 4.0, 0.5, 0.5, "/o.mp4"), " ")
 	for _, want := range []string{
 		"fade=t=in:st=0:d=0.500:c=white",
 		"fade=t=out:st=3.500:d=0.500:c=white",
@@ -342,7 +342,7 @@ func TestSegmentArgsFade(t *testing.T) {
 	}
 
 	// Without fades, no fade filter appears at all.
-	plain := strings.Join(segmentArgs(v, "/i.png", "/a.wav", "", 4.0, 0, 0, "/o.mp4"), " ")
+	plain := strings.Join(segmentArgs(v, "/i.png", "", "/a.wav", "", 4.0, 0, 0, "/o.mp4"), " ")
 	if strings.Contains(plain, "fade=") {
 		t.Errorf("unfaded segment must carry no fade filter: %s", plain)
 	}
@@ -352,7 +352,7 @@ func TestSegmentArgsFadeFollowsCaptionOverlay(t *testing.T) {
 	// A burned-in caption must fade with its page, so the fade has to come after
 	// the overlay in the filter graph — not before it.
 	v := config.Default().Video
-	args := strings.Join(segmentArgs(v, "/i.png", "/a.wav", "/c.png", 2.0, 0.25, 0, "/o.mp4"), " ")
+	args := strings.Join(segmentArgs(v, "/i.png", "", "/a.wav", "/c.png", 2.0, 0.25, 0, "/o.mp4"), " ")
 	overlay := strings.Index(args, "overlay=0:0")
 	fade := strings.Index(args, "fade=t=in")
 	if overlay < 0 || fade < 0 {
@@ -929,5 +929,95 @@ func TestAnAudioSwappedDuringTheProbesIsNotHandedToFFprobe(t *testing.T) {
 				t.Fatalf("the swapped audio was handed to %s", c[0])
 			}
 		}
+	}
+}
+
+// Everything ffmpeg writes and reads back — segments, captions, the concat
+// list, chapters, subtitles, the master until it is placed — is in a private
+// directory outside the workspace: a file the caller swaps in the workspace
+// during a render must not steer ffmpeg (ADR-0009). Only the page inputs are
+// read from the workspace.
+func TestFFmpegWritesAndReadsBackOnlyOutsideTheWorkspace(t *testing.T) {
+	ws := seed(t, twoPages)
+	fr := &fakeRunner{dur: "2.000"}
+	m := newMaster(fr)
+	if _, err := m.Build(context.Background(), ws, "deck", twoPages, Options{Chapters: true}); err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	inputs := map[string]bool{}
+	for _, p := range twoPages {
+		inputs[ws.Path(p.Image)] = true
+		inputs[ws.Path(p.Audio)] = true
+	}
+	for _, cmd := range fr.cmds {
+		for _, a := range cmd {
+			if !strings.HasPrefix(a, ws.BaseDir) {
+				continue
+			}
+			if inputs[a] {
+				continue // a page input (ffmpeg -i, or ffprobe's last argument), format pinned
+			}
+			t.Errorf("ffmpeg is handed a workspace path it writes or reads back: %s in %v", a, cmd)
+		}
+	}
+	if _, err := os.Stat(ws.Path(workspace.DirOutput, "tmp")); err == nil {
+		t.Error("output/tmp exists although the intermediates were not asked to be kept")
+	}
+	fi, err := os.Lstat(ws.Path(workspace.DirOutput, "deck.mp4"))
+	if err != nil || !fi.Mode().IsRegular() {
+		t.Errorf("the master was not placed as a regular file: %v %v", fi, err)
+	}
+}
+
+// A link planted where the master goes is replaced, not written through.
+func TestALinkPlantedAtTheMasterIsReplacedNotWrittenThrough(t *testing.T) {
+	ws := seed(t, twoPages)
+	outside := filepath.Join(t.TempDir(), "victim.txt")
+	if err := os.WriteFile(outside, []byte("keep me"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(ws.Path(workspace.DirOutput), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, ws.Path(workspace.DirOutput, "deck.mp4")); err != nil {
+		t.Fatal(err)
+	}
+	m := newMaster(&fakeRunner{dur: "2.000"})
+	if _, err := m.Build(context.Background(), ws, "deck", twoPages, Options{}); err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	if b, _ := os.ReadFile(outside); string(b) != "keep me" {
+		t.Errorf("the link's target was overwritten: %q", b)
+	}
+	if fi, err := os.Lstat(ws.Path(workspace.DirOutput, "deck.mp4")); err != nil || !fi.Mode().IsRegular() {
+		t.Errorf("output/deck.mp4 is not a regular file: %v %v", fi, err)
+	}
+}
+
+// The image's decoder comes from its own bytes: image2 picks it from the
+// extension, and a JPEG named .png never finished (measured, ffmpeg 9.0.2).
+func TestAnImageIsDecodedByItsOwnBytes(t *testing.T) {
+	for _, c := range []struct {
+		head []byte
+		want string
+	}{
+		{[]byte("\x89PNG\r\n\x1a\nrest"), "png"},
+		{[]byte{0xFF, 0xD8, 0xFF, 0xE0, 0, 0}, "mjpeg"},
+		{[]byte("BM\x00\x00"), ""},
+		{nil, ""},
+	} {
+		if got := imageCodec(c.head); got != c.want {
+			t.Errorf("imageCodec(%q) = %q, want %q", c.head, got, c.want)
+		}
+	}
+	pages := []manifest.Page{{Image: "images/p01.png", Audio: "audio/p01.wav"}}
+	ws := seed(t, pages)
+	writeInside(t, ws, "images/p01.png", "\xFF\xD8\xFFjpeg bytes named .png")
+	fr := &fakeRunner{dur: "2.000"}
+	if _, err := newMaster(fr).Build(context.Background(), ws, "deck", pages, Options{}); err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	if seg := strings.Join(fr.cmds[1], " "); !strings.Contains(seg, "-c:v mjpeg -protocol_whitelist file -i "+ws.Path("images/p01.png")) {
+		t.Errorf("a JPEG named .png is not decoded as JPEG: %s", seg)
 	}
 }

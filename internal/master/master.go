@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
@@ -154,13 +155,31 @@ func (m *Master) Build(ctx context.Context, ws *workspace.Workspace, manifestSte
 		totalSec += dur
 	}
 
-	// 3. Fresh tmp area for the per-page segments.
+	// 3. A private directory for everything ffmpeg writes and reads back:
+	// caption PNGs, segments, the concat list, chapters, subtitles, and the
+	// master itself until it is placed. The workspace is writable by the
+	// caller, and a file swapped there during a render — the concat list
+	// rewritten while ffmpeg starts, a segment replaced by an ffconcat list, a
+	// link planted where ffmpeg will write — steered ffmpeg outside the
+	// workspace (measured, ADR-0009). ffmpeg reads only the page inputs from
+	// the workspace, with their formats pinned.
+	priv, err := os.MkdirTemp("", "video-studio-render-")
+	if err != nil {
+		return Result{}, toolerr.Newf(toolerr.CodeWorkspaceFailed, "make a private render directory: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(priv) }()
 	tmpRel := filepath.Join(workspace.DirOutput, "tmp")
 	if err := ws.RemoveAll(tmpRel); err != nil {
 		return Result{}, toolerr.Newf(toolerr.CodeWorkspaceFailed, "clean tmp: %v", err)
 	}
-	if err := ws.MkdirAll(tmpRel); err != nil {
-		return Result{}, err
+	var kept []string // intermediates to copy into output/tmp when asked to keep them
+	keep := func() {
+		if !opts.KeepIntermediate {
+			return
+		}
+		for _, name := range kept {
+			_ = ws.PlaceFile(filepath.Join(tmpRel, name), filepath.Join(priv, name))
+		}
 	}
 
 	// 4. Render one segment per page. ffmpeg cannot inherit os.Root, so the
@@ -168,7 +187,7 @@ func (m *Master) Build(ctx context.Context, ws *workspace.Workspace, manifestSte
 	// When captions are enabled, each non-empty caption is rendered to a
 	// server-written transparent PNG and composited via overlay.
 	report("rendering", 0, len(items))
-	segRels := make([]string, 0, len(items))
+	segPaths := make([]string, 0, len(items))
 	captionsBurned := 0
 	fadesApplied := 0
 	for i := range items {
@@ -178,11 +197,12 @@ func (m *Master) Build(ctx context.Context, ws *workspace.Workspace, manifestSte
 			if err != nil {
 				return Result{}, toolerr.Newf(toolerr.CodeCaptionFailed, "render caption for page %d: %v", i+1, err)
 			}
-			capRel := filepath.Join(tmpRel, fmt.Sprintf("cap_%03d.png", i+1))
-			if err := ws.WriteFileAtomic(capRel, png); err != nil {
-				return Result{}, err
+			name := fmt.Sprintf("cap_%03d.png", i+1)
+			capPath = filepath.Join(priv, name)
+			if err := os.WriteFile(capPath, png, 0o600); err != nil {
+				return Result{}, toolerr.Newf(toolerr.CodeWorkspaceFailed, "write caption: %v", err)
 			}
-			capPath = ws.Path(capRel)
+			kept = append(kept, name)
 			captionsBurned++
 		}
 		// A "fade" transition fades out at the end of its own page and in at the
@@ -197,38 +217,42 @@ func (m *Master) Build(ctx context.Context, ws *workspace.Workspace, manifestSte
 		if fadeOut > 0 {
 			fadesApplied++
 		}
-		segRel := filepath.Join(tmpRel, fmt.Sprintf("seg_%03d.mp4", i+1))
+		segName := fmt.Sprintf("seg_%03d.mp4", i+1)
+		segPath := filepath.Join(priv, segName)
 		// Verified again immediately before the spawn (see step 2): a render
 		// can take minutes, and page N is opened only after page N-1 is done.
 		for _, rel := range []string{items[i].imgRel, items[i].audioRel} {
 			if err := ws.VerifyRegular(rel); err != nil {
+				keep()
 				return Result{}, err
 			}
 		}
-		args := segmentArgs(m.Cfg, ws.Path(items[i].imgRel), ws.Path(items[i].audioRel), capPath, items[i].durSec, fadeIn, fadeOut, ws.Path(segRel))
-		if err := m.runFFmpeg(ctx, args); err != nil {
+		// The image's decoder comes from its own bytes, not its extension.
+		head, err := ws.Head(items[i].imgRel, 8)
+		if err != nil {
+			keep()
 			return Result{}, err
 		}
-		segRels = append(segRels, segRel)
+		args := segmentArgs(m.Cfg, ws.Path(items[i].imgRel), imageCodec(head), ws.Path(items[i].audioRel), capPath, items[i].durSec, fadeIn, fadeOut, segPath)
+		if err := m.runFFmpeg(ctx, args); err != nil {
+			keep()
+			return Result{}, err
+		}
+		segPaths = append(segPaths, segPath)
+		kept = append(kept, segName)
 		report("rendering", i+1, len(items))
 	}
 
-	// 5. Concat list (each segment re-verified as a regular file pre-spawn).
-	segPaths := make([]string, 0, len(segRels))
-	for _, rel := range segRels {
-		if err := ws.VerifyRegular(rel); err != nil {
-			return Result{}, err
-		}
-		segPaths = append(segPaths, ws.Path(rel))
-	}
-	listRel := filepath.Join(tmpRel, "concat.txt")
+	// 5. Concat list, in the private directory.
 	list, err := concatList(segPaths)
 	if err != nil {
 		return Result{}, toolerr.New(toolerr.CodePathNotAllowed, err.Error())
 	}
-	if err := ws.WriteFileAtomic(listRel, []byte(list)); err != nil {
-		return Result{}, err
+	listPath := filepath.Join(priv, "concat.txt")
+	if err := os.WriteFile(listPath, []byte(list), 0o600); err != nil {
+		return Result{}, toolerr.Newf(toolerr.CodeWorkspaceFailed, "write concat list: %v", err)
 	}
+	kept = append(kept, "concat.txt")
 
 	// 6. Optional per-page chapter markers (ffmetadata, server-written).
 	metadataPath := ""
@@ -236,11 +260,11 @@ func (m *Master) Build(ctx context.Context, ws *workspace.Workspace, manifestSte
 	if opts.Chapters {
 		chapters := pageChapters(items)
 		chapterCount = len(chapters)
-		metaRel := filepath.Join(tmpRel, "ffmetadata.txt")
-		if err := ws.WriteFileAtomic(metaRel, []byte(ffmetadata(chapters))); err != nil {
-			return Result{}, err
+		metadataPath = filepath.Join(priv, "ffmetadata.txt")
+		if err := os.WriteFile(metadataPath, []byte(ffmetadata(chapters)), 0o600); err != nil {
+			return Result{}, toolerr.Newf(toolerr.CodeWorkspaceFailed, "write chapters: %v", err)
 		}
-		metadataPath = ws.Path(metaRel)
+		kept = append(kept, "ffmetadata.txt")
 	}
 
 	// 6b. Optional soft (closed-caption) subtitle track — an SRT muxed as
@@ -252,40 +276,35 @@ func (m *Master) Build(ctx context.Context, ws *workspace.Workspace, manifestSte
 		srtText, cues := buildSRT(items)
 		softCaptionCues = cues
 		if cues > 0 {
-			subRel := filepath.Join(tmpRel, "captions.srt")
-			if err := ws.WriteFileAtomic(subRel, []byte(srtText)); err != nil {
-				return Result{}, err
+			subtitlePath = filepath.Join(priv, "captions.srt")
+			if err := os.WriteFile(subtitlePath, []byte(srtText), 0o600); err != nil {
+				return Result{}, toolerr.Newf(toolerr.CodeWorkspaceFailed, "write subtitles: %v", err)
 			}
-			subtitlePath = ws.Path(subRel)
+			kept = append(kept, "captions.srt")
 		}
 	}
 
-	// 7. Final concat encode (stream copy — segments share codec params).
+	// 7. Final concat encode (stream copy — segments share codec params), into
+	// the private directory; then the master is placed in the workspace through
+	// its root, replacing whatever is at output/<name>.mp4 rather than writing
+	// through it.
 	name := opts.OutputName
 	if name == "" {
 		name = manifestStem
 	}
 	outRel := filepath.Join(workspace.DirOutput, name+".mp4")
-	// ffmpeg cannot inherit os.Root: it opens the output path itself, so a
-	// symlink planted at output/<name>.mp4 would be followed and the link's
-	// target overwritten with the render. Clear the path through the workspace
-	// root first — a root-based remove unlinks the link, never what it points
-	// at — so ffmpeg always creates the file fresh. (The per-page segments
-	// under output/tmp are already cleared the same way in step 3.)
-	if err := ws.RemoveAll(outRel); err != nil {
-		return Result{}, err
-	}
 	report("finalizing", len(items), len(items))
-	if err := m.runFFmpeg(ctx, concatArgs(ws.Path(listRel), metadataPath, subtitlePath, ws.Path(outRel))); err != nil {
+	rendered := filepath.Join(priv, "master.mp4")
+	if err := m.runFFmpeg(ctx, concatArgs(listPath, metadataPath, subtitlePath, rendered)); err != nil {
+		keep()
 		return Result{}, err
 	}
-
-	// Best-effort cleanup of the intermediates (segments, caption PNGs, concat
-	// list) now that the master exists. Left in place on failure (above) to aid
-	// debugging, or when the caller opts to keep them.
-	if !opts.KeepIntermediate {
-		_ = ws.RemoveAll(tmpRel)
+	if err := ws.PlaceFile(outRel, rendered); err != nil {
+		return Result{}, err
 	}
+	// The intermediates go away with the private directory, unless the caller
+	// asked to keep them: then they are copied into output/tmp.
+	keep()
 
 	return Result{
 		MasterPath:      ws.Path(outRel),
