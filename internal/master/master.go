@@ -65,7 +65,7 @@ type Result struct {
 // caption text, transition into the next page, and probed audio duration.
 type resolved struct {
 	imgRel     string
-	imgCodec   string // the decoder the image's own bytes call for (png, mjpeg)
+	imgCodec   string // the decoder the image decoded as (png, mjpeg)
 	audioRel   string
 	title      string
 	caption    string
@@ -106,13 +106,26 @@ func privateDir() (string, error) {
 	return os.MkdirTemp(root, "render-")
 }
 
+// maxImagePixels bounds a page image's size before it is decoded: a small PNG
+// can declare a huge canvas (a 130 KB file decoded to 122 MB, measured), and
+// the decode runs in the server's own process. Slides are scaled to the canvas
+// anyway.
+const maxImagePixels = 8192 * 8192
+
 // imageDecoder decodes a page image (judged and read inside the workspace root)
 // and names the ffmpeg decoder for it: png or mjpeg. Anything that does not
-// decode as PNG or JPEG is an error.
+// decode as PNG or JPEG, or is larger than maxImagePixels, is an error.
 func imageDecoder(ws *workspace.Workspace, rel string) (string, error) {
 	b, err := ws.ReadFile(rel)
 	if err != nil {
 		return "", err
+	}
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(b))
+	if err != nil {
+		return "", err
+	}
+	if cfg.Width*cfg.Height > maxImagePixels {
+		return "", fmt.Errorf("%dx%d is more pixels than 8192x8192", cfg.Width, cfg.Height)
 	}
 	_, format, err := image.Decode(bytes.NewReader(b))
 	if err != nil {

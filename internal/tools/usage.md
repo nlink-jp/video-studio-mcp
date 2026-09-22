@@ -33,8 +33,8 @@ output/            rendered mp4 + tmp    (server-written)
   page images and voice-studio synthesizes the audio under one directory, and
   this server muxes what it finds there.
 - Image/audio paths in the manifest are **relative to the workspace**.
-  Images are PNG or JPG, decoded before rendering (anything else, whatever its
-  name, is `invalid_manifest`); audio is WAV, MP3, M4A/MP4/MOV, FLAC, Ogg/Opus,
+  Images are PNG or JPG up to 8192×8192 pixels, decoded before rendering
+  (anything else, whatever its name, is `invalid_manifest`); audio is WAV, MP3, M4A/MP4/MOV, FLAC, Ogg/Opus,
   AAC, WebM/MKA, AIFF, CAF, W64, AU, AC3 or WMA — a file whose contents are a
   playlist or a concat list is refused.
 - The server never reads or writes outside the workspace (kernel-enforced;

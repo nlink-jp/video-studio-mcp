@@ -55,7 +55,7 @@ Never `go build` directly — always `make build` (outputs to `dist/`).
   workspace during a render took the output 10 of 10 times when the concat list
   lived there. `keep_intermediates` copies are deferred, so they run on every
   way out. Page images are decoded in Go at step 1 (`imageDecoder`: PNG or
-  JPEG, else `invalid_manifest`) — ffmpeg handed an undecodable image never
+  JPEG up to `maxImagePixels`, else `invalid_manifest`) — ffmpeg handed an undecodable image never
   ends — and the decoded format names ffmpeg's decoder. Test fixtures must be
   real PNGs (`encoded` / `pngImage`).
 - `internal/job/` — in-memory background-render jobs (one render per job);

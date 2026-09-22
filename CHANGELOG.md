@@ -26,8 +26,8 @@ All notable changes to this project are documented here. The format follows
 - **An image ffmpeg cannot decode no longer runs it without end.** A GIF or a
   truncated PNG named `.png` made ffmpeg fail on every looped frame, with
   stderr growing without bound. Each page image is now decoded before ffmpeg
-  runs; one that does not read as PNG or JPEG is refused with
-  `invalid_manifest`.
+  runs; one that does not read as PNG or JPEG, or is larger than 8192×8192
+  pixels, is refused with `invalid_manifest`.
 
 ### Changed
 
@@ -35,7 +35,7 @@ All notable changes to this project are documented here. The format follows
   and on every failure); without it nothing is left there, including after a
   failed render. A render's private directory more than a day old (a server
   killed mid-render) is removed by the next render.
-- Page audio is accepted in these formats: WAV, MP3, M4A/MP4, FLAC, Ogg/Opus,
+- Page audio is accepted in these formats: WAV, MP3, M4A/MP4/MOV, FLAC, Ogg/Opus,
   AAC, WebM/MKA, AIFF, CAF, W64, AU, AC3 and WMA. A file whose contents are a
   playlist or a concat list is refused.
 - Page images must be PNG or JPEG, as the README said: other formats ffmpeg

@@ -182,7 +182,8 @@ restart (an unknown `job_id` returns `job_not_found` — just re-run `master`).
 
 - `image` (required) — workspace-relative still image (PNG/JPG). It is decoded
   before rendering: a file that does not read as PNG or JPEG (a GIF, a
-  truncated file — whatever its name) is refused with `invalid_manifest`.
+  truncated file — whatever its name), or is larger than 8192×8192 pixels, is
+  refused with `invalid_manifest`.
 - `audio` (required) — workspace-relative narration audio; its duration sets the
   page's on-screen time. WAV, MP3, M4A/MP4/MOV, FLAC, Ogg/Opus, AAC, WebM/MKA,
   AIFF, CAF, W64, AU, AC3 or WMA; a file whose contents are a playlist or a

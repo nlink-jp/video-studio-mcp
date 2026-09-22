@@ -141,7 +141,7 @@ scratch directory).
   subtitles, and the master until it is placed — lives in a private directory made per render under the user's cache
   directory (`~/Library/Caches/video-studio-mcp/render` on macOS). Not `$TMPDIR`: gem-agent's and lagent's write lanes
   can write `$TMPDIR` and `/private/tmp`, and a process running as the same user lists them, so an unguessable name is
-  no barrier (the independent review measured an overwrite from a sandboxed writer). Neither lane can write the cache
+  no barrier (the independent review measured an overwrite from a sandboxed writer). No lane can write the cache
   directory (the read lane only reads it). What a server killed mid-render left is cleared by the next render once it
   is a day old. Only the master is placed, through the workspace's `os.Root`, under a temporary
   name and then renamed, so a link at its name is replaced rather than followed and a component leading out is
@@ -149,7 +149,9 @@ scratch directory).
   including when the master cannot be placed).
 - **Inputs pinned:** only the page inputs are read from the workspace. An image is read as `image2` with no pattern (a
   `%` is a name too). Each image is decoded in Go at the first check, and one that does not read as PNG or JPEG — a
-  GIF named `.png`, a truncated PNG, bytes that are no image — is refused with `invalid_manifest` before ffmpeg runs:
+  GIF named `.png`, a truncated PNG, bytes that are no image — or is larger than 8192×8192 pixels (a small PNG can
+  declare a huge canvas, and the decode runs in the server's own process) is refused with `invalid_manifest` before
+  ffmpeg runs:
   handed an image it cannot decode, ffmpeg failed on every looped frame and never ended, its stderr growing without
   bound (measured). ffmpeg's decoder comes from that decode too (by extension, a JPEG named `.png` never finished).
   Formats other than the PNG/JPG the README named (BMP and the rest ffmpeg read by extension) are now refused. Audio
@@ -161,8 +163,8 @@ scratch directory).
   swapped for a link to outside between its judgement and ffmpeg's open can be read — but with the format pinned only
   an image or audio that parses as that format is, never a credential file. In the same gap, an image that passed the
   decode swapped for a corrupt one makes ffmpeg run without end — but only the caller's own render stalls. The cache
-  directory is writable by a process of the same user running outside the sandbox (the operator lane, say) — which is
-  what the user can do anyway. pathguard is at v0.3.0 (no behaviour change for this server).
+  directory is writable by a process of the same user outside any sandbox (the user's own shell, say) — which is what
+  the user can do anyway. pathguard is at v0.3.0 (no behaviour change for this server).
 
 ## References
 

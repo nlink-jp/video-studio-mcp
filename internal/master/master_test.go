@@ -3,8 +3,10 @@ package master
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
+	"hash/crc32"
 	"image"
 	"image/gif"
 	"image/jpeg"
@@ -86,6 +88,22 @@ func encoded(t *testing.T, format string) []byte {
 		t.Fatal(err)
 	}
 	return b.Bytes()
+}
+
+// hugePNG returns a 1x1 grey PNG whose header declares w x h: what the size
+// check reads, without the pixels (a decode would allocate w*h bytes).
+func hugePNG(t *testing.T, w, h uint32) []byte {
+	t.Helper()
+	var b bytes.Buffer
+	if err := png.Encode(&b, image.NewGray(image.Rect(0, 0, 1, 1))); err != nil {
+		t.Fatal(err)
+	}
+	p := b.Bytes()
+	// signature (8) | length (4) | "IHDR" (4) | width (4) | height (4) | ... | crc
+	binary.BigEndian.PutUint32(p[16:], w)
+	binary.BigEndian.PutUint32(p[20:], h)
+	binary.BigEndian.PutUint32(p[29:], crc32.ChecksumIEEE(p[12:29]))
+	return p
 }
 
 func isProbe(args []string) bool {
@@ -1059,9 +1077,10 @@ func TestAnImageIsDecodedBeforeFFmpegSeesIt(t *testing.T) {
 
 	pngBytes := encoded(t, "png")
 	for name, content := range map[string][]byte{
-		"a GIF named .png":        encoded(t, "gif"),
-		"a truncated PNG":         pngBytes[:len(pngBytes)/2],
-		"bytes that are no image": []byte("not an image at all"),
+		"a PNG declaring 9000x9000": hugePNG(t, 9000, 9000),
+		"a GIF named .png":          encoded(t, "gif"),
+		"a truncated PNG":           pngBytes[:len(pngBytes)/2],
+		"bytes that are no image":   []byte("not an image at all"),
 	} {
 		ws := seed(t, pages)
 		writeInside(t, ws, "images/p01.png", string(content))
@@ -1069,6 +1088,9 @@ func TestAnImageIsDecodedBeforeFFmpegSeesIt(t *testing.T) {
 		_, err := newMaster(fr).Build(context.Background(), ws, "deck", pages, Options{})
 		if !errors.Is(err, toolerr.New(toolerr.CodeInvalidManifest, "")) {
 			t.Errorf("%s: err = %v, want invalid_manifest", name, err)
+		}
+		if strings.Contains(name, "9000x9000") && (err == nil || !strings.Contains(err.Error(), "9000x9000")) {
+			t.Errorf("%s: refused for another reason than its size: %v", name, err)
 		}
 		if len(fr.cmds) != 0 {
 			t.Errorf("%s: ffmpeg ran anyway: %v", name, fr.cmds)
