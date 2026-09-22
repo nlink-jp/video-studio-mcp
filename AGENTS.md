@@ -62,8 +62,9 @@ Never `go build` directly — always `make build` (outputs to `dist/`).
   is `-t <probed audio duration>`; exact and reported in the result. (The final
   container may run a few ms longer due to AAC frame alignment; expected.)
 - **ffmpeg cannot inherit `os.Root`** — image/audio/segment inputs are
-  re-verified as real regular files (`VerifyRegular`, Lstat) immediately before
-  they are handed to ffmpeg. The remaining verify-to-spawn race is accepted
+  re-verified as real regular files (`VerifyRegular`, Lstat, with the floor's
+  judgement) immediately before they are handed to ffprobe or ffmpeg; page
+  images and audio were verified only once, before the render, until v0.6.1. The remaining verify-to-spawn race is accepted
   under the local single-user threat model.
 - **The workspace base is verified by real path, because the path is handed to
   ffmpeg, which resolves it outside any root** — `os.Root` contains operations
@@ -80,17 +81,21 @@ Never `go build` directly — always `make build` (outputs to `dist/`).
   `ws.RemoveAll(outRel)` first (a root-based remove unlinks the link, never what
   it points at) so ffmpeg always creates the file fresh. `output/tmp` was
   already handled this way; the master was not.
-- **A file the caller names is judged before it is read.** The master tool
-  judges `manifest_path` and then every page's image and audio with `refused`
-  (internal/tools/master.go) — pathguard's Local policy with this server's own
-  directories, via `workdir.Resolver.LocalPath` — before `ws.ReadFile` and
-  before `Build` looks for any page. A workspace passes `CheckBeneath` but can
-  still contain a `.env`, this server's config directory or the file a link in
-  `~/.ssh` leads to: read as the manifest it came back in a parse error, named
-  as a page it was handed to ffmpeg, and "missing" against those said whether
-  it exists (ADR-0009, amendment v0.6.1). `TestExistenceIsNotRevealed`
-  compares the whole answer for a path with and without its file; three
-  mutations are caught by assertion.
+- **The workspace judges every read.** `Workspace.ReadFile`, `Stat` and
+  `VerifyRegular` call `Judge` first — pathguard's Local policy with this
+  server's own directories, the `floor` that `workspace.NewManager(check,
+  floor)` requires (`workdir.Resolver.LocalPath`; nil refuses every workspace,
+  and a Workspace literal without one refuses every read). The master tool
+  also calls `Judge` on every page before a job exists. A workspace passes
+  `CheckBeneath` but can still contain a `.env`, this server's config
+  directory or the file a link in `~/.ssh` leads to (ADR-0009, amendment
+  v0.6.1); voice-studio-mcp, which shares the workspace, does the same. Do not
+  add a read that bypasses these, and do not judge at call sites instead. A
+  page name with `%` or a glob character is refused (`patternFree`): ffmpeg
+  expands it into other files. `TestEveryReadIsJudgedBeforeItLooks`,
+  `TestExistenceIsNotRevealed` and the three ffmpeg-boundary tests in
+  internal/master pin it; eleven mutations are caught by assertion. Writes
+  are not judged.
 - **Symlink vs missing** — `VerifyRegular` returns `path_not_allowed` for a
   symlink/non-regular entry (surfaced immediately) but a plain lstat error for a
   missing file (collected → `manifest_incomplete`). Do not collapse the two.

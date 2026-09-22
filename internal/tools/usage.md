@@ -41,7 +41,8 @@ output/            rendered mp4 + tmp    (server-written)
 - A manifest, image or audio that is a `.env`, lies in this server's config
   directory, or is where a link directly inside a credential directory points
   is refused with `path_not_allowed` before it is read, whether or not it
-  exists.
+  exists. So is an image or audio name holding `%` or a glob character
+  (`*?[]{}`), which ffmpeg would read as a pattern: rename such a file.
 
 ## Render flow
 

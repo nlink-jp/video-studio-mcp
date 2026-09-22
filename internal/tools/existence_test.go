@@ -48,11 +48,12 @@ func TestExistenceIsNotRevealed(t *testing.T) {
 	writeFileAt(t, filepath.Join(ws, "ok.wav"), "aud")
 
 	srv := serverWithDir(t, server)
+	async := false
 	answer := func(manifest, page string) string {
 		if page != "" {
 			writeFileAt(t, filepath.Join(ws, "deck.jsonl"), page+"\n")
 		}
-		raw, _ := json.Marshal(map[string]any{"work_dir": work, "workspace_id": "ws", "manifest_path": manifest})
+		raw, _ := json.Marshal(map[string]any{"work_dir": work, "workspace_id": "ws", "manifest_path": manifest, "async": async})
 		_, err := srv.Call(context.Background(), "master", raw)
 		if err == nil {
 			return "accepted"
@@ -71,14 +72,17 @@ func TestExistenceIsNotRevealed(t *testing.T) {
 		{"a planted link to a credential file", "lnk_file.png", filepath.Join(home, ".aws", "planted.png")},
 		{"through a planted link to a credential directory", filepath.Join("lnk_dir", "via.png"), filepath.Join(home, ".aws", "via.png")},
 	} {
-		for _, as := range []string{"manifest", "image", "audio"} {
+		for _, as := range []string{"manifest", "image", "audio", "page 2 image", "async image"} {
 			t.Run(as+"/"+c.name, func(t *testing.T) {
 				call := func() string {
+					async = as == "async image"
 					switch as {
-					case "image":
+					case "image", "async image":
 						return answer("deck.jsonl", fmt.Sprintf(`{"image":%q,"audio":"ok.wav"}`, c.rel))
 					case "audio":
 						return answer("deck.jsonl", fmt.Sprintf(`{"image":"ok.png","audio":%q}`, c.rel))
+					case "page 2 image":
+						return answer("deck.jsonl", `{"image":"ok.png","audio":"ok.wav"}`+"\n"+fmt.Sprintf(`{"image":%q,"audio":"ok.wav"}`, c.rel))
 					}
 					return answer(c.rel, "")
 				}
@@ -98,6 +102,7 @@ func TestExistenceIsNotRevealed(t *testing.T) {
 		}
 	}
 	// The control: an ordinary deck renders.
+	async = false
 	if a := answer("deck.jsonl", `{"image":"ok.png","audio":"ok.wav"}`); a != "accepted" {
 		t.Errorf("an ordinary deck: %s", a)
 	}
@@ -112,7 +117,7 @@ func serverWithDir(t *testing.T, dir string) *mcpserver.Server {
 	resolver := workdir.NewResolver(dir)
 	srv := mcpserver.New("video-studio-mcp", "test",
 		transport.NewStdioTransport(strings.NewReader(""), io.Discard), nil)
-	Register(srv, &Deps{Cfg: cfg, WS: workspace.NewManager(resolver.CheckBeneath), WorkDir: resolver, Runner: fakeRunner{}})
+	Register(srv, &Deps{Cfg: cfg, WS: workspace.NewManager(resolver.CheckBeneath, resolver.LocalPath), WorkDir: resolver, Runner: fakeRunner{}})
 	return srv
 }
 

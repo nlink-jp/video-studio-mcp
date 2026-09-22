@@ -62,7 +62,7 @@ required argument, and `EnsureUnder` judges `<work_dir>/<workspace_id>` with
 A Manager without one refuses every workspace. pathguard v0.2.0 also refuses a path holding a NUL
 byte.
 
-## Amendment (2026-09-22, v0.6.1): judge a file the caller names before reading it
+## Amendment (2026-09-22, v0.6.1): judge every file the workspace reads before reading it
 
 `manifest_path` and the images and audio the manifest names are workspace-relative and handled
 through the `os.Root`, but the floor was not applied to them. A workspace passes `CheckBeneath` and can
@@ -75,20 +75,44 @@ found, measured here with the home directory redirected to a temporary one (9 of
 planted links out of the workspace were refused by the `os.Root` whether or not their targets
 existed).
 
-- The master tool judges `manifest_path`, then every page's image and audio, with `refused`
-  (internal/tools/master.go) — pathguard's Local policy with this server's own directories: the
-  manifest before `ws.ReadFile`, the pages before `Build` looks for any of them (on the call itself,
-  async or not). pathguard follows the links on the path itself, so no separate placement is needed.
-- `TestExistenceIsNotRevealed` calls `master` with the same path as the manifest, an image and an
-  audio, while a file is there and after it is removed, compares the whole answer and checks that no
-  contents come back. Three mutations (no floor, the manifest unjudged, the pages unjudged) all fail
-  by assertion.
-- Known limits, all in pathguard and recorded for its next release:
+- The workspace judges every read — `ReadFile`, `Stat`, `VerifyRegular` — before it reads or looks
+  (`Workspace.Judge`, internal/workspace/manager.go), by pathguard's Local policy with this server's
+  own directories. `workspace.NewManager(check, floor)` takes the floor as a required argument
+  (`workdir.Resolver.LocalPath`; a Manager without one refuses every workspace), and a Workspace built
+  without one refuses every read. The master tool also calls `Judge` on every page on the call itself,
+  so an async render is refused before a job exists. pathguard follows the links on the path itself;
+  the refusal names the path only as given, and a manifest refusal is returned as `path_not_allowed`,
+  not wrapped as `invalid_manifest`. voice-studio-mcp, which shares the workspace, does the same.
+- The independent review of a first version (which judged at the tool) found two ways around it at the
+  ffmpeg boundary, both older than this change. Pages were verified once, before rendering, and opened
+  by ffmpeg one by one afterwards: a page swapped for a link during the render (minutes, when async)
+  was handed over. Now every image and audio is verified again, with the judgement, immediately before
+  ffprobe or ffmpeg opens it. And ffmpeg reads `%d` in an image name as a numbered sequence (and, in
+  some builds, glob characters as a match): a regular file named `p%d.png` passed every check while
+  ffmpeg would open `p0.png`, `p1.png`, … unjudged. A page name holding `%`, `*`, `?`, `[`, `]`, `{` or
+  `}` is now refused.
+- Errors come in a different order for some ordinary inputs: a page that escapes the workspace or is
+  refused is answered on the call, before a job is created and before `ffmpeg_not_found`.
+- `TestExistenceIsNotRevealed` calls `master` with the same path as the manifest, an image, an audio,
+  page 2's image and an async image, while a file is there and after it is removed, compares the whole
+  answer and checks that none of the file's contents comes back. `TestEveryReadIsJudgedBeforeItLooks`
+  (internal/workspace) pins each read and a Manager or Workspace without a floor;
+  `TestAPageNameThatIsAPatternIsRefused`, `TestAPageSwappedDuringTheRenderIsNotHandedToFFmpeg` and
+  `TestAnAudioSwappedDuringTheProbesIsNotHandedToFFprobe` (internal/master) the ffmpeg boundary. Eleven
+  mutations (no floor, each read unjudged, a Manager without a floor accepted, the floor not handed to
+  the workspace, the pages unjudged on the call, no re-verify before ffmpeg or ffprobe, pattern names
+  allowed, the manifest refusal wrapped) all fail by assertion.
+- Known limits in pathguard, recorded for its next release:
   - `work_dir` is validated by pathguard/workdir in the order organization ADR-022 §4 sets (not found
     before denied), so a `work_dir` naming a credential directory is answered by whether it exists.
   - A link target with a non-ASCII name spelled in another Unicode normalisation is found by identity
-    only while it exists (pathguard does not normalise), and so is a hard link to a credential file
-    made elsewhere. Whoever can make a hard link already reaches the file.
+    only while it exists (pathguard does not normalise). A hard link made elsewhere is refused only when
+    it is to a file that is itself a place on the floor (`~/.netrc`, `~/.docker/config.json`, …), and
+    only while it exists; one to a file inside a credential directory (`~/.ssh/id_rsa`) or to a `.env`
+    is not refused at all — a directory is compared by its own identity, not by its files'.
+- The judgement and the open are two steps. Every page is verified again immediately before ffprobe
+  or ffmpeg opens it, so a page swapped for a link during a render (minutes, when async) is refused;
+  what remains is the verify-to-spawn race the local single-user threat model accepts.
 
 ## References
 

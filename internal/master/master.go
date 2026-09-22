@@ -92,6 +92,11 @@ func (m *Master) Build(ctx context.Context, ws *workspace.Workspace, manifestSte
 	items := make([]resolved, 0, len(pages))
 	var missing []map[string]any
 	for i, p := range pages {
+		for _, name := range []string{p.Image, p.Audio} {
+			if err := patternFree(name); err != nil {
+				return Result{}, err
+			}
+		}
 		imgRel, err := ws.ResolveInside(p.Image)
 		if err != nil {
 			return Result{}, err
@@ -136,6 +141,12 @@ func (m *Master) Build(ctx context.Context, ws *workspace.Workspace, manifestSte
 	// 2. Probe each page's audio duration (governs its segment length).
 	totalSec := 0.0
 	for i := range items {
+		// Verified again immediately before the spawn: step 1 may be minutes
+		// ago (async), and a page swapped for a link since is caught here,
+		// leaving only the verify-to-spawn race.
+		if err := ws.VerifyRegular(items[i].audioRel); err != nil {
+			return Result{}, err
+		}
 		dur, err := m.probeDuration(ctx, ws.Path(items[i].audioRel))
 		if err != nil {
 			return Result{}, err
@@ -188,6 +199,13 @@ func (m *Master) Build(ctx context.Context, ws *workspace.Workspace, manifestSte
 			fadesApplied++
 		}
 		segRel := filepath.Join(tmpRel, fmt.Sprintf("seg_%03d.mp4", i+1))
+		// Verified again immediately before the spawn (see step 2): a render
+		// can take minutes, and page N is opened only after page N-1 is done.
+		for _, rel := range []string{items[i].imgRel, items[i].audioRel} {
+			if err := ws.VerifyRegular(rel); err != nil {
+				return Result{}, err
+			}
+		}
 		args := segmentArgs(m.Cfg, ws.Path(items[i].imgRel), ws.Path(items[i].audioRel), capPath, items[i].durSec, fadeIn, fadeOut, ws.Path(segRel))
 		if err := m.runFFmpeg(ctx, args); err != nil {
 			return Result{}, err
@@ -322,6 +340,19 @@ func pageChapters(items []resolved) []Chapter {
 		cursor = end
 	}
 	return chs
+}
+
+// patternFree refuses a page name ffmpeg would read as a pattern rather than a
+// file: its image input expands %d into a numbered sequence (and, depending on
+// the build, glob characters into a match), so a regular file named p%d.png
+// passes every check here while ffmpeg opens p0.png, p1.png, … — files nobody
+// judged, whose existence its error would then report.
+func patternFree(name string) error {
+	if i := strings.IndexAny(name, "%*?[]{}"); i >= 0 {
+		return toolerr.Newf(toolerr.CodePathNotAllowed,
+			"%q contains %q, which ffmpeg reads as a pattern over other files; rename the file", name, name[i:i+1])
+	}
+	return nil
 }
 
 // verifyFile reports whether rel is a usable regular file. A missing file

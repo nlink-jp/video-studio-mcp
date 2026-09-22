@@ -24,7 +24,7 @@ func newToolDeps(ctx context.Context, cfg *config.Config, logger *slog.Logger) *
 	wd := workDirResolver()
 	return &tools.Deps{
 		Cfg:     cfg,
-		WS:      workspace.NewManager(wd.CheckBeneath),
+		WS:      workspace.NewManager(wd.CheckBeneath, wd.LocalPath),
 		WorkDir: wd,
 		Runner:  master.ExecRunner{},
 		JobCtx:  ctx,

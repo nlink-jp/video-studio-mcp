@@ -48,7 +48,7 @@ func newHarness(t *testing.T) *harness {
 	cfg.Video.FFmpegPath = "/bin/ls"
 	cfg.Video.FFprobePath = "/bin/ls"
 	resolver := workdir.NewResolver(t.TempDir())
-	wsm := workspace.NewManager(resolver.CheckBeneath)
+	wsm := workspace.NewManager(resolver.CheckBeneath, resolver.LocalPath)
 	srv := mcpserver.New("video-studio-mcp", "test",
 		transport.NewStdioTransport(strings.NewReader(""), io.Discard), nil)
 	Register(srv, &Deps{Cfg: cfg, WS: wsm, WorkDir: resolver, Runner: fakeRunner{}})

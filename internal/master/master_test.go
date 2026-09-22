@@ -65,7 +65,7 @@ func newMaster(r Runner) *Master {
 // workspace and returns it.
 func seed(t *testing.T, pages []manifest.Page) *workspace.Workspace {
 	t.Helper()
-	ws, err := workspace.NewManager(func(string) error { return nil }).EnsureUnder(t.TempDir(), "deck1")
+	ws, err := workspace.NewManager(func(string) error { return nil }, func(string, string) string { return "" }).EnsureUnder(t.TempDir(), "deck1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -760,5 +760,102 @@ func TestBuildDoesNotFollowLinkedOutput(t *testing.T) {
 	}
 	if !fi.Mode().IsRegular() {
 		t.Errorf("master is not a regular file (mode %s): the link survived the render", fi.Mode())
+	}
+}
+
+// A page name ffmpeg would read as a pattern is refused before anything is
+// handed to it: p%d.png is a regular file here, and ffmpeg would open p0.png,
+// p1.png, … instead — files nobody judged.
+func TestAPageNameThatIsAPatternIsRefused(t *testing.T) {
+	for _, name := range []string{"p%d.png", "p*.png", "p[0].png", "p{a,b}.png", "p?.png"} {
+		pages := []manifest.Page{{Image: name, Audio: "a.wav"}}
+		ws := seed(t, pages)
+		r := &fakeRunner{}
+		_, err := newMaster(r).Build(context.Background(), ws, "deck", pages, Options{})
+		if !errors.Is(err, toolerr.New(toolerr.CodePathNotAllowed, "")) {
+			t.Errorf("%s: err = %v, want path_not_allowed", name, err)
+		}
+		if len(r.cmds) != 0 {
+			t.Errorf("%s: %d command(s) ran", name, len(r.cmds))
+		}
+	}
+}
+
+// swapRunner swaps page 2's image for a link while page 1 renders, as a
+// caller writing to its own workspace could during a long async render.
+type swapRunner struct {
+	fakeRunner
+	swap    func()
+	onProbe bool // swap during the first ffprobe call rather than the first ffmpeg one
+	done    bool
+}
+
+func (s *swapRunner) Run(ctx context.Context, name string, args []string) ([]byte, []byte, int, error) {
+	if !s.done && isProbe(args) == s.onProbe {
+		s.done = true
+		s.swap()
+	}
+	return s.fakeRunner.Run(ctx, name, args)
+}
+
+// Each page is verified again immediately before ffmpeg opens it: page 2
+// swapped for a link after the first check is refused, never handed over.
+func TestAPageSwappedDuringTheRenderIsNotHandedToFFmpeg(t *testing.T) {
+	pages := []manifest.Page{{Image: "p1.png", Audio: "a1.wav"}, {Image: "p2.png", Audio: "a2.wav"}}
+	ws := seed(t, pages)
+	outside := filepath.Join(t.TempDir(), "secret")
+	if err := os.WriteFile(outside, []byte("SECRET"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	r := &swapRunner{swap: func() {
+		p2 := ws.Path("p2.png")
+		if err := os.Remove(p2); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(outside, p2); err != nil {
+			t.Skipf("symlinks unavailable: %v", err)
+		}
+	}}
+	_, err := newMaster(r).Build(context.Background(), ws, "deck", pages, Options{})
+	if !errors.Is(err, toolerr.New(toolerr.CodePathNotAllowed, "")) {
+		t.Fatalf("err = %v, want path_not_allowed for the swapped page", err)
+	}
+	for _, c := range r.cmds {
+		for _, a := range c {
+			if a == ws.Path("p2.png") {
+				t.Fatalf("the swapped page was handed to %s", c[0])
+			}
+		}
+	}
+}
+
+// The same before ffprobe: page 2's audio swapped for a link while page 1's is
+// probed is refused, never probed.
+func TestAnAudioSwappedDuringTheProbesIsNotHandedToFFprobe(t *testing.T) {
+	pages := []manifest.Page{{Image: "p1.png", Audio: "a1.wav"}, {Image: "p2.png", Audio: "a2.wav"}}
+	ws := seed(t, pages)
+	outside := filepath.Join(t.TempDir(), "secret")
+	if err := os.WriteFile(outside, []byte("SECRET"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	r := &swapRunner{onProbe: true, swap: func() {
+		a2 := ws.Path("a2.wav")
+		if err := os.Remove(a2); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(outside, a2); err != nil {
+			t.Skipf("symlinks unavailable: %v", err)
+		}
+	}}
+	_, err := newMaster(r).Build(context.Background(), ws, "deck", pages, Options{})
+	if !errors.Is(err, toolerr.New(toolerr.CodePathNotAllowed, "")) {
+		t.Fatalf("err = %v, want path_not_allowed for the swapped audio", err)
+	}
+	for _, c := range r.cmds {
+		for _, a := range c {
+			if a == ws.Path("a2.wav") {
+				t.Fatalf("the swapped audio was handed to %s", c[0])
+			}
+		}
 	}
 }
