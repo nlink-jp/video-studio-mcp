@@ -101,6 +101,12 @@ func TestExistenceIsNotRevealed(t *testing.T) {
 			})
 		}
 	}
+	// A page name ffmpeg reads as a pattern is refused on the call, async too.
+	async = true
+	writeFileAt(t, filepath.Join(ws, "p%d.png"), "img")
+	if a := answer("deck.jsonl", `{"image":"p%d.png","audio":"ok.wav"}`); !strings.HasPrefix(a, toolerr.CodePathNotAllowed+" ") {
+		t.Errorf("an async deck with a pattern name: %s, want path_not_allowed on the call", a)
+	}
 	// The control: an ordinary deck renders.
 	async = false
 	if a := answer("deck.jsonl", `{"image":"ok.png","audio":"ok.wav"}`); a != "accepted" {

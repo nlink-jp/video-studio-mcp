@@ -87,21 +87,26 @@ existed).
   ffmpeg boundary, both older than this change. Pages were verified once, before rendering, and opened
   by ffmpeg one by one afterwards: a page swapped for a link during the render (minutes, when async)
   was handed over. Now every image and audio is verified again, with the judgement, immediately before
-  ffprobe or ffmpeg opens it. And ffmpeg reads `%d` in an image name as a numbered sequence (and, in
-  some builds, glob characters as a match): a regular file named `p%d.png` passed every check while
-  ffmpeg would open `p0.png`, `p1.png`, … unjudged. A page name holding `%`, `*`, `?`, `[`, `]`, `{` or
-  `}` is now refused.
-- Errors come in a different order for some ordinary inputs: a page that escapes the workspace or is
-  refused is answered on the call, before a job is created and before `ffmpeg_not_found`.
+  ffprobe or ffmpeg opens it. And ffmpeg reads `%d` in an image path as a numbered sequence: a regular
+  file named `p%d.png` passed every check while ffmpeg would open `p0.png`, `p1.png`, … unjudged. A page
+  whose path holds `%` — its name, or the workspace's own path through a `work_dir` holding one — is now
+  refused (`master.CheckNames`), on the call and again in `Build`. ffmpeg globs only after an unescaped
+  `%`, so brackets, braces and the other glob characters stay ordinary.
+- Errors come in a different order for some ordinary inputs: a page the floor refuses, one that escapes
+  the workspace lexically, and one whose path holds `%` are answered on the call, before a job is
+  created and before `ffmpeg_not_found`; a page that is a link is still found by `Build`.
 - `TestExistenceIsNotRevealed` calls `master` with the same path as the manifest, an image, an audio,
   page 2's image and an async image, while a file is there and after it is removed, compares the whole
   answer and checks that none of the file's contents comes back. `TestEveryReadIsJudgedBeforeItLooks`
   (internal/workspace) pins each read and a Manager or Workspace without a floor;
-  `TestAPageNameThatIsAPatternIsRefused`, `TestAPageSwappedDuringTheRenderIsNotHandedToFFmpeg` and
-  `TestAnAudioSwappedDuringTheProbesIsNotHandedToFFprobe` (internal/master) the ffmpeg boundary. Eleven
-  mutations (no floor, each read unjudged, a Manager without a floor accepted, the floor not handed to
-  the workspace, the pages unjudged on the call, no re-verify before ffmpeg or ffprobe, pattern names
-  allowed, the manifest refusal wrapped) all fail by assertion.
+  `TestAPageNameThatIsAPatternIsRefused`, `TestAWorkspacePathThatIsAPatternIsRefused`,
+  `TestAPageSwappedDuringTheRenderIsNotHandedToFFmpeg` (an image and an audio) and
+  `TestAnAudioSwappedDuringTheProbesIsNotHandedToFFprobe` (internal/master) the ffmpeg boundary, and
+  `TestTheServersWorkspacesJudgeEveryRead` (cmd) the server's own wiring. Sixteen mutations (no floor,
+  each read unjudged, a Manager without a floor accepted, the floor not handed to the workspace, the
+  wiring's floor a no-op, the pages unjudged on the call, no re-verify before ffmpeg or ffprobe or of
+  the audio, pattern names allowed, the audio or the workspace path unchecked, the names unchecked on
+  the call, the manifest refusal wrapped) all fail by assertion.
 - Known limits in pathguard, recorded for its next release:
   - `work_dir` is validated by pathguard/workdir in the order organization ADR-022 §4 sets (not found
     before denied), so a `work_dir` naming a credential directory is answered by whether it exists.
@@ -111,8 +116,14 @@ existed).
     only while it exists; one to a file inside a credential directory (`~/.ssh/id_rsa`) or to a `.env`
     is not refused at all — a directory is compared by its own identity, not by its files'.
 - The judgement and the open are two steps. Every page is verified again immediately before ffprobe
-  or ffmpeg opens it, so a page swapped for a link during a render (minutes, when async) is refused;
-  what remains is the verify-to-spawn race the local single-user threat model accepts.
+  or ffmpeg opens it, so a page swapped for a link during a render (minutes, when async) is refused.
+- Not closed here — ffmpeg is an interpreter, and these need its input arguments changed and measured
+  against a real ffmpeg (recorded for a follow-up across the media servers): ffmpeg picks an input's
+  format from its contents, so a page file holding a concat list or a playlist can make it open files
+  nobody judged; the workspace directory itself can be swapped for a link during a render (its real
+  path is checked once, when the workspace is made — pathguard still refuses a place on the floor, so
+  this breaks containment, not the floor); and the lists the server writes for ffmpeg (concat,
+  chapters, captions) are not verified again before the spawn.
 
 ## References
 

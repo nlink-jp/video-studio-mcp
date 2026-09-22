@@ -122,7 +122,11 @@ func registerMaster(srv *mcpserver.Server, d *Deps) {
 			return nil, err
 		}
 		// Every image and audio the manifest names is judged here, before
-		// the render looks for any of them or hands one to ffmpeg.
+		// the render looks for any of them or hands one to ffmpeg — on the
+		// call, so an async render is refused before a job exists.
+		if err := master.CheckNames(ws, pages); err != nil {
+			return nil, err
+		}
 		for _, p := range pages {
 			for _, name := range []string{p.Image, p.Audio} {
 				rel, err := ws.ResolveInside(name)

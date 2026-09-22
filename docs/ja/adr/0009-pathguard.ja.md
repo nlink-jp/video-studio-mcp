@@ -75,18 +75,22 @@ Manager はすべてのワークスペースを拒む。pathguard v0.2.0 は NUL
 - ツール側で判定した最初の版の独立レビューが、ffmpeg の境界で判定を迂回する道を 2 つ見つけた（どちらもこの変更より前から）。
   ページはレンダリング前に 1 度だけ検証され、その後 ffmpeg が 1 枚ずつ開いていたので、レンダリング中（非同期なら数分）に
   リンクへすり替えたページが渡された。今は各画像・音声を、ffprobe・ffmpeg が開く直前に判定込みでもう一度検証する。
-  また ffmpeg は画像名の `%d` を連番として（ビルドによってはグロブ文字も一致として）読むので、`p%d.png` という通常ファイルは
-  すべての検査を通り、ffmpeg は判定されていない `p0.png`・`p1.png`… を開き得た。`%`・`*`・`?`・`[`・`]`・`{`・`}` を含む
-  ページ名は拒む。
-- 普通の入力でもエラーの順序が変わるものがある: ワークスペースから出る、または拒まれるページは、ジョブを作る前、
-  `ffmpeg_not_found` より前に、呼び出しの時点で答える。
+  また ffmpeg は画像パスの `%d` を連番として読むので、`p%d.png` という通常ファイルはすべての検査を通り、ffmpeg は
+  判定されていない `p0.png`・`p1.png`… を開き得た。パスに `%` を含むページ —— 名前でも、`%` を含む `work_dir` を通した
+  ワークスペース自身のパスでも —— は拒む（`master.CheckNames`。呼び出しの時点と `Build` の中で）。ffmpeg がグロブを
+  使うのはエスケープされていない `%` の後だけなので、角括弧・波括弧などほかのグロブ文字は普通の文字のまま。
+- 普通の入力でもエラーの順序が変わるものがある: 床が拒むページ、字面でワークスペースから出るページ、パスに `%` を含む
+  ページは、ジョブを作る前、`ffmpeg_not_found` より前に、呼び出しの時点で答える。リンクであるページは引き続き
+  `Build` が見つける。
 - `TestExistenceIsNotRevealed` は、同じパスをファイルがある状態と消した状態で、マニフェスト・画像・音声・2 ページ目の画像・
   非同期の画像として `master` を呼び、答え全体を比べ、ファイルの中身が一切出ないことを確かめる。
   `TestEveryReadIsJudgedBeforeItLooks`（internal/workspace）が各読み取りと床の無い Manager・Workspace を、
-  `TestAPageNameThatIsAPatternIsRefused`・`TestAPageSwappedDuringTheRenderIsNotHandedToFFmpeg`・
-  `TestAnAudioSwappedDuringTheProbesIsNotHandedToFFprobe`（internal/master）が ffmpeg の境界を固定する。11 の変異
-  （床を外す・各読み取りの判定を外す・床の無い Manager を受け入れる・床をワークスペースへ渡さない・呼び出し時のページの
-  判定を外す・ffmpeg / ffprobe 直前の再検証を外す・パターン名を許す・マニフェストの拒否を包む）はすべてアサーションで落ちた。
+  `TestAPageNameThatIsAPatternIsRefused`・`TestAWorkspacePathThatIsAPatternIsRefused`・
+  `TestAPageSwappedDuringTheRenderIsNotHandedToFFmpeg`（画像と音声）・`TestAnAudioSwappedDuringTheProbesIsNotHandedToFFprobe`
+  （internal/master）が ffmpeg の境界を、`TestTheServersWorkspacesJudgeEveryRead`（cmd）がサーバー自身の配線を固定する。
+  16 の変異（床を外す・各読み取りの判定を外す・床の無い Manager を受け入れる・床をワークスペースへ渡さない・配線の床を空に
+  する・呼び出し時のページの判定を外す・ffmpeg / ffprobe 直前の再検証を外すか音声を外す・パターン名を許す・音声や
+  ワークスペースのパスを検査しない・呼び出し時に名前を検査しない・マニフェストの拒否を包む）はすべてアサーションで落ちた。
 - pathguard 側の既知の限界（次のリリースに向けて記録）:
   - `work_dir` は pathguard/workdir が組織 ADR-022 §4 の順序（not found が denied より先）で検証するので、資格情報の
     ディレクトリを指す `work_dir` は、存在するかどうかで答えが変わる。
@@ -95,7 +99,12 @@ Manager はすべてのワークスペースを拒む。pathguard v0.2.0 は NUL
     `~/.docker/config.json` など）へのものだけで、それも存在するときだけ。資格情報ディレクトリの中のファイル
     （`~/.ssh/id_rsa`）や `.env` へのハードリンクは拒まない —— ディレクトリはそれ自身の同一性で比べ、中のファイルでは比べない。
 - 判定と開くことは 2 段。各ページは ffprobe・ffmpeg が開く直前にもう一度検証するので、レンダリング中（非同期なら
-  数分）にリンクへすり替えたページは拒む。残るのは、ローカル単一利用者の脅威モデルが受け入れている検証から起動までの競合。
+  数分）にリンクへすり替えたページは拒む。
+- ここでは閉じていないもの —— ffmpeg はインタプリタで、これらはその入力引数を変え、本物の ffmpeg で測る必要がある
+  （メディア系サーバー横断の後続作業として記録）: ffmpeg は入力の形式を中身から選ぶので、連結リストやプレイリストを
+  書いたページのファイルは、誰も判定していないファイルを開かせうる。ワークスペースのディレクトリ自体をレンダリング中に
+  リンクへすり替えられる（実パスの検査はワークスペースを作るときの 1 回だけ。床の場所は pathguard がそれでも拒むので、
+  破れるのは封じ込めで床ではない）。サーバーが ffmpeg のために書くリスト（連結・章・字幕）は起動直前に検証し直さない。
 
 ## References
 

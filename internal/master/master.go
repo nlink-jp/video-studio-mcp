@@ -91,12 +91,10 @@ func (m *Master) Build(ctx context.Context, ws *workspace.Workspace, manifestSte
 	// reported together as manifest_incomplete.
 	items := make([]resolved, 0, len(pages))
 	var missing []map[string]any
+	if err := CheckNames(ws, pages); err != nil {
+		return Result{}, err
+	}
 	for i, p := range pages {
-		for _, name := range []string{p.Image, p.Audio} {
-			if err := patternFree(name); err != nil {
-				return Result{}, err
-			}
-		}
 		imgRel, err := ws.ResolveInside(p.Image)
 		if err != nil {
 			return Result{}, err
@@ -342,15 +340,25 @@ func pageChapters(items []resolved) []Chapter {
 	return chs
 }
 
-// patternFree refuses a page name ffmpeg would read as a pattern rather than a
-// file: its image input expands %d into a numbered sequence (and, depending on
-// the build, glob characters into a match), so a regular file named p%d.png
-// passes every check here while ffmpeg opens p0.png, p1.png, … — files nobody
-// judged, whose existence its error would then report.
-func patternFree(name string) error {
-	if i := strings.IndexAny(name, "%*?[]{}"); i >= 0 {
+// CheckNames refuses a page whose path ffmpeg would read as a pattern rather
+// than a file. ffmpeg's image input expands %d into a numbered sequence, and
+// globs only after an unescaped %, so a regular file named p%d.png passes
+// every check here while ffmpeg opens p0.png, p1.png, … — files nobody judged,
+// whose existence its error would then report. The whole path reaches ffmpeg,
+// so the workspace's own path is checked too (a work_dir holding %). The
+// master tool calls it on the call, and Build again before any spawn.
+func CheckNames(ws *workspace.Workspace, pages []manifest.Page) error {
+	if strings.Contains(ws.BaseDir, "%") {
 		return toolerr.Newf(toolerr.CodePathNotAllowed,
-			"%q contains %q, which ffmpeg reads as a pattern over other files; rename the file", name, name[i:i+1])
+			"the workspace path %q contains %%, which ffmpeg reads as a pattern over other files; use a work_dir without it", ws.BaseDir)
+	}
+	for _, p := range pages {
+		for _, name := range []string{p.Image, p.Audio} {
+			if strings.Contains(name, "%") {
+				return toolerr.Newf(toolerr.CodePathNotAllowed,
+					"%q contains %%, which ffmpeg reads as a pattern over other files; rename the file", name)
+			}
+		}
 	}
 	return nil
 }

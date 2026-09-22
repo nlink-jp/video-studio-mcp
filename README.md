@@ -104,8 +104,8 @@ credential directory points is refused with `path_not_allowed` before anything
 reads it — whether or not the file is there, with the same answer either way.
 A workspace can contain such a place (one inside a sync folder that
 `~/.ssh/config` links into). Every page is checked again immediately before
-ffmpeg opens it, and a page name holding `%` or a glob character (`*?[]{}`) is
-refused: ffmpeg would read it as a pattern over other files. Two spellings
+ffmpeg opens it, and a page whose path holds `%` (its name, or your `work_dir`)
+is refused: ffmpeg would read it as a pattern over other files. Two spellings
 still get past the check — a name in another Unicode normalisation and a hard
 link; the limits are listed in [ADR-0009](docs/en/adr/0009-pathguard.md).
 

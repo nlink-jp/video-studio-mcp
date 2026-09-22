@@ -91,10 +91,13 @@ Never `go build` directly — always `make build` (outputs to `dist/`).
   directory or the file a link in `~/.ssh` leads to (ADR-0009, amendment
   v0.6.1); voice-studio-mcp, which shares the workspace, does the same. Do not
   add a read that bypasses these, and do not judge at call sites instead. A
-  page name with `%` or a glob character is refused (`patternFree`): ffmpeg
-  expands it into other files. `TestEveryReadIsJudgedBeforeItLooks`,
+  page path holding `%` — its name or the workspace path — is refused
+  (`master.CheckNames`, on the call and in `Build`): ffmpeg expands it into
+  other files; other glob characters are ordinary. `TestEveryReadIsJudgedBeforeItLooks`,
   `TestExistenceIsNotRevealed` and the three ffmpeg-boundary tests in
-  internal/master pin it; eleven mutations are caught by assertion. Writes
+  internal/master and `TestTheServersWorkspacesJudgeEveryRead` (cmd) pin it;
+  sixteen mutations are caught by assertion. ffmpeg-level gaps (format from
+  contents, the workspace swapped mid-render) are recorded, not closed (ADR-0009). Writes
   are not judged.
 - **Symlink vs missing** — `VerifyRegular` returns `path_not_allowed` for a
   symlink/non-regular entry (surfaced immediately) but a plain lstat error for a

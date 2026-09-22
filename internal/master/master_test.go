@@ -763,21 +763,51 @@ func TestBuildDoesNotFollowLinkedOutput(t *testing.T) {
 	}
 }
 
-// A page name ffmpeg would read as a pattern is refused before anything is
+// A page path ffmpeg would read as a pattern is refused before anything is
 // handed to it: p%d.png is a regular file here, and ffmpeg would open p0.png,
-// p1.png, … instead — files nobody judged.
+// p1.png, … instead — files nobody judged. The image and the audio are both
+// checked. ffmpeg globs only after a %, so brackets, braces and the other glob
+// characters are ordinary.
 func TestAPageNameThatIsAPatternIsRefused(t *testing.T) {
-	for _, name := range []string{"p%d.png", "p*.png", "p[0].png", "p{a,b}.png", "p?.png"} {
-		pages := []manifest.Page{{Image: name, Audio: "a.wav"}}
+	for _, pages := range [][]manifest.Page{
+		{{Image: "p%d.png", Audio: "a.wav"}},
+		{{Image: "p.png", Audio: "a%03d.wav"}},
+		{{Image: "p.png", Audio: "a.wav"}, {Image: "q%%.png", Audio: "b.wav"}},
+	} {
 		ws := seed(t, pages)
 		r := &fakeRunner{}
 		_, err := newMaster(r).Build(context.Background(), ws, "deck", pages, Options{})
 		if !errors.Is(err, toolerr.New(toolerr.CodePathNotAllowed, "")) {
-			t.Errorf("%s: err = %v, want path_not_allowed", name, err)
+			t.Errorf("%v: err = %v, want path_not_allowed", pages, err)
 		}
 		if len(r.cmds) != 0 {
-			t.Errorf("%s: %d command(s) ran", name, len(r.cmds))
+			t.Errorf("%v: %d command(s) ran", pages, len(r.cmds))
 		}
+	}
+	pages := []manifest.Page{{Image: "Slide [1] {a}.png", Audio: "what?*.wav"}}
+	if _, err := newMaster(&fakeRunner{}).Build(context.Background(), seed(t, pages), "deck", pages, Options{}); err != nil {
+		t.Errorf("glob characters without %%: %v, want accepted", err)
+	}
+}
+
+// The whole path reaches ffmpeg, so a workspace path holding % is refused too.
+func TestAWorkspacePathThatIsAPatternIsRefused(t *testing.T) {
+	pages := []manifest.Page{{Image: "p.png", Audio: "a.wav"}}
+	work := filepath.Join(t.TempDir(), "w%d")
+	if err := os.Mkdir(work, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	ws, err := workspace.NewManager(func(string) error { return nil }, func(string, string) string { return "" }).EnsureUnder(work, "deck1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range pages {
+		writeInside(t, ws, p.Image, "img")
+		writeInside(t, ws, p.Audio, "aud")
+	}
+	r := &fakeRunner{}
+	if _, err := newMaster(r).Build(context.Background(), ws, "deck", pages, Options{}); !errors.Is(err, toolerr.New(toolerr.CodePathNotAllowed, "")) || len(r.cmds) != 0 {
+		t.Errorf("err = %v with %d command(s), want path_not_allowed and none", err, len(r.cmds))
 	}
 }
 
@@ -798,32 +828,38 @@ func (s *swapRunner) Run(ctx context.Context, name string, args []string) ([]byt
 	return s.fakeRunner.Run(ctx, name, args)
 }
 
-// Each page is verified again immediately before ffmpeg opens it: page 2
-// swapped for a link after the first check is refused, never handed over.
+// Each page is verified again immediately before ffmpeg opens it: page 2's
+// image or audio swapped for a link after the first checks (the probes
+// included) is refused, never handed over.
 func TestAPageSwappedDuringTheRenderIsNotHandedToFFmpeg(t *testing.T) {
-	pages := []manifest.Page{{Image: "p1.png", Audio: "a1.wav"}, {Image: "p2.png", Audio: "a2.wav"}}
-	ws := seed(t, pages)
-	outside := filepath.Join(t.TempDir(), "secret")
-	if err := os.WriteFile(outside, []byte("SECRET"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	r := &swapRunner{swap: func() {
-		p2 := ws.Path("p2.png")
-		if err := os.Remove(p2); err != nil {
+	for _, swapped := range []string{"p2.png", "a2.wav"} {
+		pages := []manifest.Page{{Image: "p1.png", Audio: "a1.wav"}, {Image: "p2.png", Audio: "a2.wav"}}
+		ws := seed(t, pages)
+		outside := filepath.Join(t.TempDir(), "secret")
+		if err := os.WriteFile(outside, []byte("SECRET"), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.Symlink(outside, p2); err != nil {
-			t.Skipf("symlinks unavailable: %v", err)
+		r := &swapRunner{swap: func() {
+			p := ws.Path(swapped)
+			if err := os.Remove(p); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink(outside, p); err != nil {
+				t.Skipf("symlinks unavailable: %v", err)
+			}
+		}}
+		_, err := newMaster(r).Build(context.Background(), ws, "deck", pages, Options{})
+		if !errors.Is(err, toolerr.New(toolerr.CodePathNotAllowed, "")) {
+			t.Fatalf("%s: err = %v, want path_not_allowed for the swapped file", swapped, err)
 		}
-	}}
-	_, err := newMaster(r).Build(context.Background(), ws, "deck", pages, Options{})
-	if !errors.Is(err, toolerr.New(toolerr.CodePathNotAllowed, "")) {
-		t.Fatalf("err = %v, want path_not_allowed for the swapped page", err)
-	}
-	for _, c := range r.cmds {
-		for _, a := range c {
-			if a == ws.Path("p2.png") {
-				t.Fatalf("the swapped page was handed to %s", c[0])
+		for _, c := range r.cmds {
+			if isProbe(c[1:]) {
+				continue // the probes ran before the swap
+			}
+			for _, a := range c {
+				if a == ws.Path(swapped) {
+					t.Fatalf("%s: the swapped file was handed to %s", swapped, c[0])
+				}
 			}
 		}
 	}
