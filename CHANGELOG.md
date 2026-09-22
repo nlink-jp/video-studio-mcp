@@ -4,6 +4,28 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- **The Linux archives no longer carry macOS file metadata.** macOS `tar` wrote
+  each bundled file's extended attributes (`com.apple.provenance`, and a Dropbox
+  attribute where the tree is synced) into the `.tar.gz` twice: as AppleDouble
+  `._` members, which GNU tar extracts as stray `._<name>` files beside the real
+  ones, and as `LIBARCHIVE.xattr.*` / `SCHILY.xattr.*` pax headers, which it
+  reports as unknown keywords. `make package` now archives with
+  `COPYFILE_DISABLE=1 tar --no-xattrs`; each setting stops one of the two.
+  Archives already published still carry them; the files themselves are
+  unaffected.
+
+### Internal
+
+- `make verify-release` also judges each Linux archive: no AppleDouble or other
+  macOS metadata members — listed with `--options 'tar:!mac-ext'`, because a
+  plain macOS listing folds `._` members away — no extended attributes as pax
+  headers, and exactly the canonical binary, `README.md`, `LICENSE` and
+  `FONTS_LICENSE`, compared in the C locale.
+
 ## [0.6.2] - 2026-09-22
 
 ### Security
