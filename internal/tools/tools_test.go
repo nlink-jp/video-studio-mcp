@@ -47,10 +47,11 @@ func newHarness(t *testing.T) *harness {
 	cfg := config.Default()
 	cfg.Video.FFmpegPath = "/bin/ls"
 	cfg.Video.FFprobePath = "/bin/ls"
-	wsm := workspace.NewManager()
+	resolver := workdir.NewResolver(t.TempDir())
+	wsm := workspace.NewManager(resolver.CheckBeneath)
 	srv := mcpserver.New("video-studio-mcp", "test",
 		transport.NewStdioTransport(strings.NewReader(""), io.Discard), nil)
-	Register(srv, &Deps{Cfg: cfg, WS: wsm, WorkDir: workdir.NewResolver(t.TempDir()), Runner: fakeRunner{}})
+	Register(srv, &Deps{Cfg: cfg, WS: wsm, WorkDir: resolver, Runner: fakeRunner{}})
 	// The floor under every per-tool loop: with no tools registered, each
 	// contract would pass without having examined anything.
 	if len(srv.Tools()) == 0 {

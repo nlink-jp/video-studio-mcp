@@ -17,7 +17,7 @@ import (
 // scribes and image-forge were fixed then; this server was not.
 func TestAMissingFileNamesThePathItLookedFor(t *testing.T) {
 	workDir := t.TempDir()
-	var m Manager
+	m := NewManager(allowAll)
 	w, err := m.EnsureUnder(workDir, "deck")
 	if err != nil {
 		t.Fatal(err)
@@ -65,7 +65,7 @@ func TestEnsureRefusesLinkedWorkspaceDir(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	w, err := NewManager().EnsureUnder(workDir, "deck")
+	w, err := NewManager(allowAll).EnsureUnder(workDir, "deck")
 	if err == nil {
 		t.Fatalf("a linked workspace dir was accepted: base=%s", w.BaseDir)
 	}
@@ -87,5 +87,33 @@ func TestEnsureRefusesLinkedWorkspaceDir(t *testing.T) {
 			names = append(names, e.Name())
 		}
 		t.Errorf("the link's target was written through: %v", names)
+	}
+}
+
+// allowAll stands for the server's check in tests of the manager's own
+// mechanics; the check itself is workdir.Resolver.CheckBeneath's.
+func allowAll(string) error { return nil }
+
+// The directory actually used is judged before it is made: the check sees
+// <work_dir>/<workspace_id>, and its refusal is returned as is, with nothing
+// created. A Manager without a check refuses every workspace.
+func TestEnsureUnderJudgesTheWorkspaceDirectoryBeforeMakingIt(t *testing.T) {
+	work := t.TempDir()
+	refusal := errors.New("refused")
+	var seen string
+	m := NewManager(func(dir string) error { seen = dir; return refusal })
+	if _, err := m.EnsureUnder(work, "gh"); !errors.Is(err, refusal) {
+		t.Fatalf("EnsureUnder = %v, want the check's refusal", err)
+	}
+	if want := filepath.Join(work, "gh"); seen != want {
+		t.Errorf("the check saw %q, want %q", seen, want)
+	}
+	if _, err := os.Stat(filepath.Join(work, "gh")); !os.IsNotExist(err) {
+		t.Errorf("a refused workspace was created (stat: %v)", err)
+	}
+	for name, m := range map[string]*Manager{"no check": NewManager(nil), "zero": {}} {
+		if _, err := m.EnsureUnder(work, "ws"); err == nil {
+			t.Errorf("%s: EnsureUnder succeeded", name)
+		}
 	}
 }

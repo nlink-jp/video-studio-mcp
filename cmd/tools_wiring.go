@@ -21,10 +21,11 @@ import (
 // ctx is the server-lifetime context: async renders outlive the tool call
 // that started them but must stop on shutdown.
 func newToolDeps(ctx context.Context, cfg *config.Config, logger *slog.Logger) *tools.Deps {
+	wd := workDirResolver()
 	return &tools.Deps{
 		Cfg:     cfg,
-		WS:      workspace.NewManager(),
-		WorkDir: workDirResolver(),
+		WS:      workspace.NewManager(wd.CheckBeneath),
+		WorkDir: wd,
 		Runner:  master.ExecRunner{},
 		JobCtx:  ctx,
 		Logger:  logger,

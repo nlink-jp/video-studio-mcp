@@ -76,6 +76,12 @@ func (r Resolver) Validate(dir string) (string, error) {
 	return resolved, toolErr(err)
 }
 
+// CheckBeneath reports why dir — <work_dir>/<workspace_id>, the directory a
+// call actually uses, which may not exist yet — may not be used, as a
+// work_dir_denied toolerr, or nil. The workspace manager calls it before it
+// makes or uses a workspace.
+func (r Resolver) CheckBeneath(dir string) error { return toolErr(r.r.CheckBeneath(dir)) }
+
 // toolErr carries a pathguard refusal onto toolerr with the same code,
 // message and details; any other error passes through.
 func toolErr(err error) error {

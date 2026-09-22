@@ -202,10 +202,16 @@ func (w *Workspace) VerifyRegular(rel string) error {
 // holds no default root of its own: a directory the caller cannot read back
 // turns a successful call into a path to nothing (organization ADR-021;
 // ADR-0008).
-type Manager struct{}
+type Manager struct {
+	check func(dir string) error
+}
 
-// NewManager returns a Manager.
-func NewManager() *Manager { return &Manager{} }
+// NewManager returns a Manager. check judges <work_dir>/<workspace_id> — the
+// directory actually used — before it is made or used: validating work_dir
+// alone let work_dir=~/.config with workspace_id=gh land in ~/.config/gh. It
+// is workdir.Resolver.CheckBeneath in the server; a Manager without one
+// refuses every workspace.
+func NewManager(check func(dir string) error) *Manager { return &Manager{check: check} }
 
 // EnsureUnder materializes <workDir>/<id> and its subdirectories (idempotent).
 // workDir must be an absolute path to an existing directory the caller can read
@@ -216,7 +222,15 @@ func (m *Manager) EnsureUnder(workDir, id string) (*Workspace, error) {
 		return nil, toolerr.Newf(toolerr.CodeWorkDirInvalid,
 			"work_dir %q must be an absolute path", workDir)
 	}
-	return m.ensureUnder(filepath.Clean(workDir), id)
+	root := filepath.Clean(workDir)
+	if m == nil || m.check == nil {
+		return nil, toolerr.New(toolerr.CodeWorkDirDenied,
+			"this server's workspace check was not set up (workspace.NewManager)")
+	}
+	if err := m.check(filepath.Join(root, id)); err != nil {
+		return nil, err
+	}
+	return m.ensureUnder(root, id)
 }
 
 func (m *Manager) ensureUnder(root, id string) (*Workspace, error) {
