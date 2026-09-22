@@ -1,6 +1,7 @@
 # ADR-0008: The work directory is a per-call `work_dir`, with no default root
 
-- **Status**: Accepted (2026-09-13)
+- **Status**: Accepted (2026-09-13) — its implementation (the work-directory checks) is replaced by
+  [ADR-0009](0009-pathguard.md) (nlink-jp/pathguard)
 
 ## Context
 

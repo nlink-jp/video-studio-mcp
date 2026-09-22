@@ -1,6 +1,7 @@
 # ADR-0008: work dir は呼び出しごとの `work_dir`、既定ルートは持たない
 
-- **Status**: Accepted (2026-09-13)
+- **Status**: Accepted (2026-09-13) —— その実装（work dir の検査）は [ADR-0009](0009-pathguard.ja.md)
+  （nlink-jp/pathguard）で置き換えた
 
 ## 背景
 

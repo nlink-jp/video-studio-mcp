@@ -130,6 +130,6 @@ them (debugging).
 | work_dir_invalid | not absolute, started with `~`, or contained `..` |
 | work_dir_not_found | not there, or not a directory — it is yours, so this is a typo; the server does not create it |
 | work_dir_not_writable | the server cannot write there |
-| work_dir_denied | a system location, your home directory itself, a credential directory, or this server's own config directory (`~/.config/video-studio-mcp`) |
+| work_dir_denied | a system location, your home directory itself, a credential or agent-control location (or where a link directly inside one points), this server's own config directory (`~/.config/video-studio-mcp`) — under any spelling — or the home directory cannot be determined; `details.reason` says which: `system_dir`, `home_dir`, `sensitive_path`, `server_dir`, `home_unknown`, `unconfigured`, `unresolvable_path` |
 | invalid_workspace_id | match [a-zA-Z0-9_-]{1,64} |
 | job_not_found | the server restarted (async jobs are in-memory); re-run master (it re-renders from the same workspace) |

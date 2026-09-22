@@ -91,7 +91,8 @@ output/            出力mp4 + tmp        （サーバーが書く）
 システム領域、ホームディレクトリそのもの、資格情報/エージェント制御の場所
 （`~/.ssh`、`~/.aws`、`~/.claude` など）、および**このサーバー自身の設定
 ディレクトリ（`~/.config/video-studio-mcp`）**を `work_dir` に指定した呼び出しは、
-サブディレクトリを含めて `work_dir_denied` で拒否する。work_dir は呼び出し側の
+サブディレクトリを含め、どんな綴りで渡しても `work_dir_denied` で拒否する（判定は
+[nlink-jp/pathguard](https://github.com/nlink-jp/pathguard) が行う）。work_dir は呼び出し側の
 ものであり、サーバー自身のディレクトリはワークスペースではない。
 
 ## ツール

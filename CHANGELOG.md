@@ -6,6 +6,23 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **Path judgement moved to [nlink-jp/pathguard](https://github.com/nlink-jp/pathguard)**
+  (ADR-0009). `internal/workdir` is now an adapter onto it; the resolver is
+  built with `workdir.NewResolver(serverOwnedDirs()...)`. Places are compared by
+  file identity and by names folded the way the disk folds them, instead of by
+  name.
+- A `work_dir` is now **refused** in the real places under your home from the
+  list gem-agent and lagent use (newly `~/.kube`, `~/.config/gh`, `~/.azure`,
+  `~/.terraform.d`, `~/.gemini`, `~/.config/mcp-bridge`, `~/.netrc`, `~/.npmrc`,
+  `~/.pypirc`, `~/.git-credentials`, `~/.vault-token`, `~/.docker/config.json`,
+  `~/.claude.json`, `~/.bash_history`, `~/.zsh_history`), under every spelling of
+  any refused place (another case, a link, a firmlink), wherever a link directly
+  inside one of those directories points, in the account's own home too when
+  `$HOME` names another, in Linux `/etc`, and whenever the home directory cannot
+  be determined. `work_dir_denied` carries `reason` in its `details`.
+
 ### Fixed
 
 - **`make verify-release` now fails closed.** Its last block chained unzip, the

@@ -115,16 +115,22 @@ Never `go build` directly — always `make build` (outputs to `dist/`).
     inputs get sequential indices after concat input 0, so the `-map` /
     `-map_metadata` indices are computed, not hard-coded. Empty captions → no
     track (`soft_caption_cues=0`).
+- **The path judgement is nlink-jp/pathguard's, not this repository's.**
+  `internal/workdir` only takes `_meta` from the context and carries
+  pathguard's errors onto `toolerr` (ADR-0009). Do not add a location list or a
+  name comparison here; a fix to the judgement is a pathguard release and a
+  dependency bump.
 - **`workdir.Resolver` is built in exactly one place** — `workDirResolver()`
-  in `cmd/tools_wiring.go`, reached only through `newToolDeps`. Its `Denied`
-  list carries this server's own directories (organization ADR-021 §4), which
-  today is `configDir()` = `~/.config/video-studio-mcp`; `resolveConfig`
+  in `cmd/tools_wiring.go`, reached only through `newToolDeps`, with
+  `workdir.NewResolver(serverOwnedDirs()...)`. Those are this server's own
+  directories (organization ADR-021 §4), which today is
+  `configDir()` = `~/.config/video-studio-mcp`; `resolveConfig`
   searches that same expression so the denial cannot drift from the location.
   There is no state directory — this is a pure compositor and every byte it
   produces goes under the caller's `work_dir`. Add one and it belongs in
-  `serverOwnedDirs()`. Do not write `workdir.Resolver{}` in a tool: an empty
-  `Denied` is a resolver that lets a caller point ffmpeg at our own
-  configuration.
+  `serverOwnedDirs()`. A zero `workdir.Resolver{}` refuses every call, and so
+  does an empty server directory — tests build one with
+  `workdir.NewResolver(t.TempDir())`.
 
 ## ADR cheat sheet
 

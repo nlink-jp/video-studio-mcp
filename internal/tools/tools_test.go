@@ -17,6 +17,7 @@ import (
 	"github.com/nlink-jp/video-studio-mcp/internal/mcpserver"
 	"github.com/nlink-jp/video-studio-mcp/internal/toolerr"
 	"github.com/nlink-jp/video-studio-mcp/internal/transport"
+	"github.com/nlink-jp/video-studio-mcp/internal/workdir"
 	"github.com/nlink-jp/video-studio-mcp/internal/workspace"
 )
 
@@ -49,7 +50,7 @@ func newHarness(t *testing.T) *harness {
 	wsm := workspace.NewManager()
 	srv := mcpserver.New("video-studio-mcp", "test",
 		transport.NewStdioTransport(strings.NewReader(""), io.Discard), nil)
-	Register(srv, &Deps{Cfg: cfg, WS: wsm, Runner: fakeRunner{}})
+	Register(srv, &Deps{Cfg: cfg, WS: wsm, WorkDir: workdir.NewResolver(t.TempDir()), Runner: fakeRunner{}})
 	// The floor under every per-tool loop: with no tools registered, each
 	// contract would pass without having examined anything.
 	if len(srv.Tools()) == 0 {

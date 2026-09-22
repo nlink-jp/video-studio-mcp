@@ -40,7 +40,7 @@ func newToolDeps(ctx context.Context, cfg *config.Config, logger *slog.Logger) *
 // directory as its workspace root and have ffmpeg write segments, concat lists
 // and the rendered MP4 in among our own configuration, on a model's say-so.
 func workDirResolver() workdir.Resolver {
-	return workdir.Resolver{Denied: serverOwnedDirs()}
+	return workdir.NewResolver(serverOwnedDirs()...)
 }
 
 // serverOwnedDirs lists this server's own config and state directories.
@@ -49,13 +49,10 @@ func workDirResolver() workdir.Resolver {
 // is a pure compositor, every byte it produces goes under the caller's
 // `work_dir`, and the `~/.video-studio` default root that used to exist was
 // deleted when ADR-021 was adopted. If a state directory is ever
-// reintroduced it belongs here.
+// reintroduced it belongs here. An empty one (no home) is passed on, and
+// refuses every call rather than protecting nothing.
 func serverOwnedDirs() []string {
-	dir := configDir()
-	if dir == "" {
-		return nil
-	}
-	return []string{dir}
+	return []string{configDir()}
 }
 
 // configDir is where this server keeps its own config.toml.
