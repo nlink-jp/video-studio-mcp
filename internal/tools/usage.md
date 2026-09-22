@@ -42,7 +42,8 @@ output/            rendered mp4 + tmp    (server-written)
   directory, or is where a link directly inside a credential directory points
   is refused with `path_not_allowed` before it is read, whether or not it
   exists. So is an image or audio whose path holds `%` — its name or your
-  `work_dir` — which ffmpeg would read as a pattern: rename it.
+  `work_dir` — which ffmpeg would read as a pattern: rename the file, or use a
+  `work_dir` without `%`.
 
 ## Render flow
 

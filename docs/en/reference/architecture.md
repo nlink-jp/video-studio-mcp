@@ -67,8 +67,10 @@ refusing a workspace that turns out to be a link. The comparison is the
 load-bearing half, because the path is handed to ffmpeg, which resolves it
 outside any root. ffmpeg cannot inherit `os.Root`, so inputs are re-verified
 with Lstat immediately before the spawn and the output path is cleared through
-the root so a link left there cannot be followed; the residual
-verify-to-spawn race is accepted under the local single-user threat model.
+the root so a link left there cannot be followed; the verify-to-spawn race is
+accepted under the local single-user threat model. It is not the only gap:
+the workspace directory swapped for a link mid-render, and the formats ffmpeg
+picks from a file's contents, are recorded in ADR-0009 and not closed here.
 
 ## Error model
 

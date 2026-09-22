@@ -64,8 +64,11 @@ Never `go build` directly — always `make build` (outputs to `dist/`).
 - **ffmpeg cannot inherit `os.Root`** — image/audio/segment inputs are
   re-verified as real regular files (`VerifyRegular`, Lstat, with the floor's
   judgement) immediately before they are handed to ffprobe or ffmpeg; page
-  images and audio were verified only once, before the render, until v0.6.1. The remaining verify-to-spawn race is accepted
-  under the local single-user threat model.
+  images and audio were verified only once, before the render, until v0.6.1.
+  The verify-to-spawn race is accepted under the local single-user threat
+  model; it is not the only gap — the workspace directory swapped mid-render
+  and the formats ffmpeg picks from a file's contents are recorded, not
+  closed (ADR-0009, amendment v0.6.1).
 - **The workspace base is verified by real path, because the path is handed to
   ffmpeg, which resolves it outside any root** — `os.Root` contains operations
   *within* a root but resolves the root path itself normally, so a link planted

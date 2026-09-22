@@ -140,8 +140,9 @@ func (m *Master) Build(ctx context.Context, ws *workspace.Workspace, manifestSte
 	totalSec := 0.0
 	for i := range items {
 		// Verified again immediately before the spawn: step 1 may be minutes
-		// ago (async), and a page swapped for a link since is caught here,
-		// leaving only the verify-to-spawn race.
+		// ago (async), and a page swapped for a link since is caught here.
+		// What this does not close is recorded in ADR-0009 (the workspace
+		// swapped mid-render, formats ffmpeg picks from contents).
 		if err := ws.VerifyRegular(items[i].audioRel); err != nil {
 			return Result{}, err
 		}
