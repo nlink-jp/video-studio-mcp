@@ -125,9 +125,13 @@ package-skill:
 	@zip -qrX "$(SKILL_ZIP)" "$(SKILL_NAME)" -x '*.DS_Store'
 	@echo "packaged: $(SKILL_ZIP)"
 
-## verify-skill-zip: refuse a release whose skill zip is missing, holds anything
-## but the tracked files of the skill at its root, or differs from them.
+## verify-skill-zip: refuse a release from a dirty tree, or whose skill zip is
+## missing, holds anything but the tracked files of the skill at its root, or
+## differs from them.
 verify-skill-zip:
+	@case "$(VERSION)" in *-dirty) \
+		echo "verify-skill-zip: FAIL — $(VERSION): the working tree has uncommitted changes, so the zip would not match the tag."; \
+		exit 1;; esac
 	@test -f "$(SKILL_ZIP)" || { \
 		echo "verify-skill-zip: FAIL — $(SKILL_ZIP) is missing. make package builds it; every release carries it."; \
 		exit 1; }

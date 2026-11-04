@@ -27,6 +27,11 @@ make verify-release  # gate: notarized, fresh, runs at this version, clean linux
 make install-skill   # unpack the skill zip into ~/.claude/skills (SKILLS_DEST=...)
 ```
 
+**Releasing uploads the skill zip too.** `make package` builds
+`dist/presentation-video-<version>.zip` beside the binary archives and `verify-release`
+refuses a release without it, but nothing checks the upload: attach it with
+the binaries (`gh release upload`), every release.
+
 Never `go build` directly — always `make build` (outputs to `dist/`).
 
 ## Structure
