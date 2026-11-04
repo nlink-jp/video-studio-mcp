@@ -96,7 +96,7 @@ dist/video-studio-mcp doctor
 リポジトリからは、`make install-skill` が zip を作って `~/.claude/skills/` に
 展開します（別の場所は `SKILLS_DEST=<dir>`）。`make test` は組織のスキル検証を
 走らせます。`internal/tools/skill_test.go` はスキルとサーバーを照合します。
-全ツールに触れていること、スキルが教える名前がすべてサーバーにあること、
+全ツールに触れていること、スキルが backtick で囲んだ識別子（snake_case の名前と、`key: value` の例のキー）がすべてサーバーにあること（1 語の名前は照合しない）、
 廃止した名前が無いこと、マニフェストの例が読めることを確かめます
 （[ADR-0010](docs/ja/adr/0010-bundled-presentation-video-skill.ja.md)）。
 

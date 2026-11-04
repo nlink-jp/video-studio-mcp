@@ -97,9 +97,8 @@ the one from the release that matches your server.
 From a clone, `make install-skill` builds the zip and unpacks it into
 `~/.claude/skills/` (`SKILLS_DEST=<dir>` for another directory). `make test`
 runs the organization's skill validator, and `internal/tools/skill_test.go`
-holds the skill to the server: every tool is named, every name the skill
-teaches exists in the server, retired names stay absent, and the manifest
-example parses
+holds the skill to the server: every tool is named, every identifier the skill writes in backticks (a snake_case name, or the key of a `key: value` example) exists in the server (a one-word name is
+not checked), retired names stay absent, and the manifest example parses
 ([ADR-0010](docs/en/adr/0010-bundled-presentation-video-skill.md)).
 
 ## Workspace model

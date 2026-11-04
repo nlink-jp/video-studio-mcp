@@ -43,7 +43,8 @@ succeeds or fails:
 3. **`internal/tools/skill_test.go` holds the skill to the server** in both
    directions:
    - every registered tool is named;
-   - every backticked identifier is a registered tool, an input schema
+   - every snake_case identifier in backticks, and the key of every backticked
+     `key: value` example, is a registered tool, an input schema
      property, a `toolerr` code or a json tag of the server's own types;
    - the retired `workspace_root` spellings and `~/.video-studio` stay absent;
    - the manifest example parses with `internal/manifest`.
@@ -61,8 +62,9 @@ succeeds or fails:
 
 - An agent asked for a narrated video has the order of work and the voice-studio
   hand-off in one place, and the README tells each caller how to install it.
-- A rename of this server's tools, arguments, codes or manifest fields fails the
-  build until the skill follows. A rename in voice-studio does not; that list
-  is maintained by hand.
+- A rename of this server's tools, codes, or snake_case arguments and fields
+  fails the build until the skill follows. A one-word argument or field in
+  backticks (`captions`, `width`) is not checked, nor is a rename in
+  voice-studio, whose names are listed by hand.
 - The skill and the server install separately: Homebrew and the binary zips
   carry the server only.

@@ -104,12 +104,15 @@ func TestSkillNamesEveryRegisteredTool(t *testing.T) {
 // otherServerNames are backticked identifiers that belong to the servers
 // upstream of this one in the chain the skill drives. They are not this
 // server's, so this repository cannot derive them; each is listed with its
-// owner so a rename there is a deliberate edit here.
+// owner so a rename there is a deliberate edit here. A voice-studio name that
+// this server also has (output_name, master, check_job) passes as this
+// server's, so a rename of it in voice-studio does not fail here either.
 var otherServerNames = map[string]string{
 	"list_speakers":       "voice-studio tool",
 	"register_dictionary": "voice-studio tool",
 	"synthesize_line":     "voice-studio tool",
 	"pause_after_ms":      "voice-studio script field",
+	"format":              "voice-studio master argument (mp3 or m4b)",
 	"credits_path":        "voice-studio master result",
 	"unverified_models":   "voice-studio master result",
 }
@@ -118,13 +121,31 @@ var otherServerNames = map[string]string{
 // or field name: lower-case words joined by underscores.
 var snakeIdent = regexp.MustCompile("`([a-z]+(?:_[a-z0-9]+)+)`")
 
+// keyIdent is the key of a `key: value` example, such as `async: true`: a
+// single word, which snakeIdent does not see.
+var keyIdent = regexp.MustCompile("`([a-z][a-z0-9_]*): [^`]+`")
+
+// skillIdentifiers returns the names the skill teaches that this test can
+// tell from prose: snake_case identifiers in backticks, and the keys of
+// backticked `key: value` examples. A single plain word in backticks is not
+// among them — it cannot be told from an ordinary word — so a misspelled
+// one-word argument or key passes unless an example that parses carries it.
+func skillIdentifiers(corpus string) []string {
+	var out []string
+	for _, re := range []*regexp.Regexp{snakeIdent, keyIdent} {
+		for _, m := range re.FindAllStringSubmatch(corpus, -1) {
+			out = append(out, m[1])
+		}
+	}
+	return out
+}
+
 // A retired or misspelled name in the skill passes every "does the skill
 // mention X" check; only a closed vocabulary catches it.
 func TestSkillNamesOnlyWhatTheServerHas(t *testing.T) {
 	known := serverVocabulary(t)
 	seen := map[string]bool{}
-	for _, m := range snakeIdent.FindAllStringSubmatch(readSkillCorpus(t), -1) {
-		name := m[1]
+	for _, name := range skillIdentifiers(readSkillCorpus(t)) {
 		if seen[name] {
 			continue
 		}
