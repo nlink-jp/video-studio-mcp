@@ -4,6 +4,36 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.7.0] - 2026-11-04
+
+### Added
+
+- **A bundled skill, `presentation-video`** (#1, ADR-0010). It covers the whole
+  chain for one narrated video:
+  - settling the destination, which sets the canvas and the kind of captions;
+  - page images at the canvas aspect;
+  - one voice-studio script and master per page, with line ids unique across
+    pages (one workspace shares `wav/<id>.wav`) and a trailing pause;
+  - merging the voice credits of every page;
+  - the manifest's titles, captions and transitions;
+  - `master`, and handing the review to the user.
+
+  mcp-tactics no longer carries this server's guidance (organization ADR-027).
+- **The skill ships on every release** as `presentation-video-vX.Y.Z.zip`,
+  with the skill folder at the zip's root. `make package` builds it, and
+  `make verify-release` refuses a release whose skill zip is missing, stale, or
+  built from a dirty tree. `make install-skill` unpacks it into
+  `~/.claude/skills/`. The README says how the app, Claude Code, gem-agent and
+  lagent install it.
+- `make test` runs the organization's skill validator, and
+  `internal/tools/skill_test.go` holds the skill to the server:
+  - every tool is named;
+  - every backticked snake_case identifier or `key:` is a tool, schema
+    property, `toolerr` code or json tag (voice-studio's names are listed with
+    their owner);
+  - retired names stay absent;
+  - the manifest example parses.
+
 ## [0.6.4] - 2026-11-04
 
 ### Changed
