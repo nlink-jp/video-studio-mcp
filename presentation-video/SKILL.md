@@ -108,10 +108,11 @@ single lines with `synthesize_line` — with these additions for video:
 - **Master each page** with voice-studio's `master`, `format: "mp3"` and
   `output_name` set to the page (`p01`), giving `master/p01.mp3`. Every page is
   normalised to the same loudness target, so levels match from page to page.
-- **Credits**: voice-studio's `master` reports `credits_path` and
-  `unverified_models`. For a published video, put the credits on a last page or
-  in the video's description, and tell the user about any unverified model
-  before publishing.
+- **Credits**: each voice-studio `master` reports the credits and
+  `unverified_models` of the voices **that page** used, and writes them to its
+  own `credits_path`. A video's credits are the union over every page: merge
+  them (without duplicates) for a last page or the video's description, and tell
+  the user about any model unverified on any page before publishing.
 
 To change one page later: edit that page's script, synthesize it again (only the
 changed lines are re-synthesized — the cache), master that page again, then run
@@ -160,8 +161,9 @@ count of zero where you asked for captions means the pages carry no `caption`.
 You cannot watch the result. Give the user the MP4 path (`master_path`), the
 duration and page count, and what to check: that each page's narration matches
 its image, the readings of names and terms, the captions. Fix a page by
-repeating its steps and calling `master` again; untouched pages cost nothing to
-re-render.
+repeating its steps and calling `master` again. Only voice-studio's synthesis is
+cached: video-studio encodes every page again on each render, so a long deck
+takes as long the second time — use `async: true`.
 
 ## When something fails
 
@@ -171,7 +173,7 @@ servers:
 | Code | What usually happened |
 |---|---|
 | `manifest_incomplete` | A file the manifest names is not in the workspace: a page not mastered yet, a different `workspace_id` or `work_dir` on another server, or a typo in a path. `details.missing` lists them |
-| `invalid_manifest` | An image that is not PNG/JPEG, an unknown field or transition, or an empty manifest; `details.errors` lists every one |
+| `invalid_manifest` | An unknown field or transition (`details.errors` lists them, up to a cap), an empty manifest, or an image that is not PNG/JPEG (`details.page` and `details.image` name it) |
 | `probe_failed` | A page's audio cannot be read; master or supply it again |
 | `job_not_found` | The server restarted during an async render; call `master` again |
 | `work_dir_required` | `work_dir` was not passed; every server in the chain needs it |
