@@ -1,16 +1,17 @@
 // Package config loads the video-studio-mcp TOML configuration.
 //
-// Unknown keys are rejected (typo detection via toml.MetaData.Undecoded),
+// Unknown keys are rejected (typo detection via toml.UnknownKeysError),
 // and "~" is expanded in path-valued fields. Defaults are chosen so the
 // server produces a standard 1080p/30fps H.264 video out of the box.
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 
-	"github.com/BurntSushi/toml"
+	"github.com/nlink-jp/toml"
 )
 
 // Config is the root configuration.
@@ -101,11 +102,13 @@ func Default() *Config {
 // Load reads path over the defaults. Unknown keys are an error.
 func Load(path string) (*Config, error) {
 	cfg := Default()
-	meta, err := toml.DecodeFile(path, cfg)
-	if err != nil {
+	_, err := toml.DecodeFile(path, cfg)
+	var unknown *toml.UnknownKeysError
+	if err != nil && !errors.As(err, &unknown) {
 		return nil, fmt.Errorf("load %s: %w", path, err)
 	}
-	if undecoded := meta.Undecoded(); len(undecoded) > 0 {
+	if unknown != nil {
+		undecoded := unknown.Keys
 		// A key this server removed deserves its name and its reason, not the
 		// same "unknown key" a typo gets: the operator set it deliberately and
 		// has to be told what replaced it (ADR-0008).

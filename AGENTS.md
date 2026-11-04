@@ -9,7 +9,8 @@ its audio, so A/V sync is exact by construction. It is a **pure compositor** —
 slide rendering and audio synthesis happen upstream (voice-studio-mcp supplies
 the audio); this server only muxes and concatenates. Language-agnostic (it just
 stitches images + audio). Skeleton ported from `voice-studio-mcp` /
-`data-toolbox-mcp`. Dependencies: `cobra`, `BurntSushi/toml`, and
+`data-toolbox-mcp`. Dependencies: `cobra`, `nlink-jp/toml` (strict: an unknown
+key is an error), and
 `golang.org/x/image` (caption text rendering) — ffmpeg + ffprobe are runtime
 dependencies.
 
