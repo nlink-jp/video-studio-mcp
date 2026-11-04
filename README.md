@@ -69,6 +69,39 @@ dist/video-studio-mcp doctor
 The workspace directory must be reachable by the server process (the same
 filesystem where the agent places the images, audio, and manifest).
 
+## Skill (bundled): presentation-video
+
+The repository bundles the **presentation-video** skill: the order of work for
+turning a deck, a document or a theme into one narrated video. It covers
+settling the destination (canvas and captions) and rendering page images. It
+covers producing one audio file per page with voice-studio — one script per
+page, line ids unique across the pages, a trailing pause before the next page,
+and the voice credits. It then covers writing the manifest, calling `master`,
+and handing the result to the user to watch. It builds on `get_usage` rather
+than repeating it, and leaves dialogue writing and casting to voice-studio's
+`multi-actor-narration` skill.
+
+The server and the skill install separately: Homebrew and the binary archives
+carry the server only. Every release attaches the skill as its own asset,
+`presentation-video-vX.Y.Z.zip`, with the skill folder at the zip's root. Take
+the one from the release that matches your server.
+
+- **Claude (desktop app / claude.ai)** — Customize → Skills → upload the zip.
+  Upload the new zip again after each update; the app keeps the old one until
+  you do.
+- **Claude Code** — `unzip presentation-video-vX.Y.Z.zip -d ~/.claude/skills/`
+- **gem-agent / lagent** — unpack it into `~/.config/gem-agent/skills/` or
+  `~/.config/lagent/skills/`. Copy, do not link: their sandboxes cannot read
+  `~/.claude`, so a link to an install there does not load.
+
+From a clone, `make install-skill` builds the zip and unpacks it into
+`~/.claude/skills/` (`SKILLS_DEST=<dir>` for another directory). `make test`
+runs the organization's skill validator, and `internal/tools/skill_test.go`
+holds the skill to the server: every tool is named, every name the skill
+teaches exists in the server, retired names stay absent, and the manifest
+example parses
+([ADR-0010](docs/en/adr/0010-bundled-presentation-video-skill.md)).
+
 ## Workspace model
 
 One workspace = one deck: `<work_dir>/<workspace_id>/`
@@ -220,6 +253,7 @@ and the pad `background` color are all configurable.
 - [Architecture](docs/en/reference/architecture.md) — module map, render
   pipeline, error model, testing strategy.
 - [ADR-0001: two-phase render pipeline](docs/en/adr/0001-render-pipeline.md).
+- [ADR-0010: the bundled presentation-video skill](docs/en/adr/0010-bundled-presentation-video-skill.md).
 - [RFP](docs/en/video-studio-mcp-rfp.md) — approved scope; canonical source for
   design decisions.
 

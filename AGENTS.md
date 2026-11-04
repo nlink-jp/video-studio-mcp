@@ -19,8 +19,12 @@ dependencies.
 ```sh
 make build      # → dist/video-studio-mcp (auto-codesign on darwin)
 make test       # go test ./... (hermetic: no ffmpeg needed — faked Runner)
+                # + tests/validate-skill.sh (the organization's skill validator)
 make package    # build-all (4 platforms; darwin arm64 only) + zip/tar.gz + notarize darwin
-make verify-release  # gate: notarized, fresh, runs at this version, clean linux archives (run before upload)
+                # + package-skill → dist/presentation-video-<version>.zip
+make verify-release  # gate: notarized, fresh, runs at this version, clean linux archives,
+                     # and the skill zip (verify-skill-zip) — run before upload
+make install-skill   # unpack the skill zip into ~/.claude/skills (SKILLS_DEST=...)
 ```
 
 Never `go build` directly — always `make build` (outputs to `dist/`).
@@ -205,6 +209,15 @@ Never `go build` directly — always `make build` (outputs to `dist/`).
   (config + per call, default 0.5) clamped so half of every page stays at full
   brightness; sub-frame fades dropped; last page's transition ignored; audio
   never faded; reported as `fades_applied`.
+- **ADR-0010**: the bundled **presentation-video** skill (organization ADR-027)
+  at `presentation-video/` — the whole chain (images → one voice-studio script
+  and master per page, ids unique across pages → manifest → `master`), not a
+  restatement of `get_usage`. `internal/tools/skill_test.go` requires every
+  backticked identifier to be a registered tool, schema property, toolerr code
+  or json tag; voice-studio's names are in `otherServerNames` with their owner
+  (hand-maintained — a voice-studio rename does not fail this build). The zip
+  ships on every release: `make package` builds it and `verify-release` refuses
+  a release without it.
 
 Full texts: [`docs/en/adr/`](docs/en/adr/) / [`docs/ja/adr/`](docs/ja/adr/).
 
@@ -215,6 +228,6 @@ Full texts: [`docs/en/adr/`](docs/en/adr/) / [`docs/ja/adr/`](docs/ja/adr/).
   — module map, render pipeline, error model, testing strategy.
 - [`docs/ja/video-studio-mcp-rfp.ja.md`](docs/ja/video-studio-mcp-rfp.ja.md) /
   [`docs/en/video-studio-mcp-rfp.md`](docs/en/video-studio-mcp-rfp.md) —
-  approved RFP; canonical source for scope (pure compositor; workflow skill =
-  separate skills-series project). Its "captions + transitions = Phase 2" note
+  approved RFP; canonical source for scope (pure compositor). Its "workflow
+  skill = separate skills-series project" is superseded by ADR-0010. Its "captions + transitions = Phase 2" note
   is now shipped — ADR-0004/0006 (captions) and ADR-0007 (fade).

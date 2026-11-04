@@ -21,7 +21,7 @@ PLATFORMS := \
 	darwin/arm64 \
 	windows/amd64
 
-.PHONY: build build-all package verify-release test clean help
+.PHONY: build build-all package verify-release verify-skill-zip test package-skill install-skill uninstall-skill clean help
 
 ## build: Build binary for the current OS/Arch → ./dist/video-studio-mcp
 build:
@@ -43,7 +43,8 @@ build-all:
 ## README.md + LICENSE + FONTS_LICENSE (bundled M PLUS 1p caption font),
 ## and notarize the darwin build. Asset naming follows the org Release
 ## Archive Standard (video-studio-mcp-vX.Y.Z-<os>-<arch>.<ext>).
-package: build-all
+## Also builds the skill zip (package-skill): every release carries both.
+package: build-all package-skill
 	@cd $(BIN_DIR) && for p in $(PLATFORMS); do os=$${p%/*}; arch=$${p#*/}; \
 		ext=""; [ "$$os" = windows ] && ext=".exe"; \
 		stage=_pkg; rm -rf $$stage; mkdir -p $$stage; \
@@ -60,7 +61,8 @@ package: build-all
 ## not unpack, does not run, or holds a build from another tag, and a linux
 ## archive that carries macOS metadata or anything but its canonical files.
 ## Every step fails closed; only the spctl line is informational.
-verify-release:
+## Its prerequisite verify-skill-zip refuses a release without the skill zip.
+verify-release: verify-skill-zip
 	@test -f "$(BIN_DIR)/$(BINARY)-$(VERSION)-darwin-arm64.zip.notarized" || { \
 		echo "verify-release: FAIL — $(BINARY)-$(VERSION)-darwin-arm64.zip has no notarization marker."; \
 		echo "  make package must end with '[notarize] ...: Accepted'. Do not upload this zip."; \
@@ -104,9 +106,60 @@ verify-release:
 	done
 	@echo "verify-release: OK ($(VERSION), notarized, unpacks, runs, reports its version, clean linux archives)"
 
-## test: Run all unit tests (hermetic: no ffmpeg needed)
+## test: Run all unit tests (hermetic: no ffmpeg needed) and the skill validator
 test:
 	go test ./...
+	@tests/validate-skill.sh
+
+SKILLS_DEST ?= $(HOME)/.claude/skills
+SKILL_NAME  := presentation-video
+SKILL_ZIP   := $(BIN_DIR)/$(SKILL_NAME)-$(VERSION).zip
+
+## package-skill: Zip the bundled skill → dist/presentation-video-<version>.zip.
+## The zip's root is the skill folder — the layout the app's skill registration
+## accepts and the skills-series repositories ship. A separate release asset.
+package-skill:
+	@tests/validate-skill.sh >/dev/null
+	@mkdir -p $(BIN_DIR)
+	@rm -f "$(SKILL_ZIP)"
+	@zip -qrX "$(SKILL_ZIP)" "$(SKILL_NAME)" -x '*.DS_Store'
+	@echo "packaged: $(SKILL_ZIP)"
+
+## verify-skill-zip: refuse a release whose skill zip is missing, holds anything
+## but the tracked files of the skill at its root, or differs from them.
+verify-skill-zip:
+	@test -f "$(SKILL_ZIP)" || { \
+		echo "verify-skill-zip: FAIL — $(SKILL_ZIP) is missing. make package builds it; every release carries it."; \
+		exit 1; }
+	@got=$$(unzip -Z1 "$(SKILL_ZIP)" | grep -v '/$$' | LC_ALL=C sort); \
+		want=$$(git ls-files "$(SKILL_NAME)" | LC_ALL=C sort); \
+		if [ "$$got" != "$$want" ]; then \
+			echo "verify-skill-zip: FAIL — $(SKILL_ZIP) does not hold exactly the tracked files of $(SKILL_NAME)/, at its root."; \
+			echo "  An untracked file in $(SKILL_NAME)/ ends up in the zip too; remove it or commit it, then re-run make package."; \
+			exit 1; fi
+	@tmp=$$(mktemp -d); rc=0; \
+		if unzip -q "$(SKILL_ZIP)" -d "$$tmp"; then \
+			for f in $$(git ls-files "$(SKILL_NAME)"); do \
+				cmp -s "$$tmp/$$f" "$$f" || { echo "verify-skill-zip: FAIL — $$f in $(SKILL_ZIP) differs from the working tree (re-run make package)."; rc=1; break; }; \
+			done; \
+		else echo "verify-skill-zip: FAIL — $(SKILL_ZIP) does not unpack."; rc=1; fi; \
+		rm -rf "$$tmp"; \
+		exit $$rc
+	@echo "verify-skill-zip: OK ($(SKILL_ZIP))"
+
+## install-skill: Install the skill from the built zip into SKILLS_DEST
+## (default ~/.claude/skills). Unpacking the zip rather than copying the source
+## tree means a packaging defect breaks this install instead of a release.
+install-skill: package-skill
+	@mkdir -p "$(SKILLS_DEST)"
+	rm -rf "$(SKILLS_DEST)/$(SKILL_NAME)"
+	@unzip -q "$(SKILL_ZIP)" -d "$(SKILLS_DEST)"
+	@echo "installed from $(SKILL_ZIP) -> $(SKILLS_DEST)/$(SKILL_NAME)"
+
+## uninstall-skill: Remove the installed presentation-video skill
+uninstall-skill:
+	rm -rf "$(SKILLS_DEST)/$(SKILL_NAME)"
+	@echo "removed: $(SKILLS_DEST)/$(SKILL_NAME)"
 
 ## clean: Remove build artifacts
 clean:

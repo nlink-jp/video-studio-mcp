@@ -67,6 +67,39 @@ dist/video-studio-mcp doctor
 ワークスペースディレクトリはサーバープロセスから到達可能な場所（エージェントが
 画像・音声・マニフェストを置く場所と同一ファイルシステム）である必要がある。
 
+## 同梱スキル: presentation-video
+
+リポジトリに **presentation-video** スキルを同梱しています。資料・文書・テーマを
+1 本のナレーション付き動画にするまでの作業の順序です。まず配信先を決め
+（画面の比率と字幕の種類）、ページ画像を描きます。次に voice-studio で
+ページごとの音声を作ります。台本はページごとに分け、行 id はページを通して
+重ならないようにし、次のページまでの間を最後に置き、音声モデルのクレジットを
+扱います。最後にマニフェストを書いて `master` を呼び、できた動画を利用者に
+確認してもらいます。`get_usage` を前提にしてその中身は繰り返しません。
+対話の台本とキャスティングは voice-studio の `multi-actor-narration` スキルに
+任せます。
+
+サーバーとスキルは別々に入れます。Homebrew とバイナリのアーカイブには
+サーバーしか入っていません。各リリースには、スキルを別のアセット
+`presentation-video-vX.Y.Z.zip` として付けています（zip の根はスキルの
+フォルダ）。使っているサーバーと同じリリースのものを取ってください。
+
+- **Claude（デスクトップアプリ / claude.ai）** — カスタマイズ → スキル から
+  zip をアップロードします。更新のたびに新しい zip を上げ直してください。
+  上げ直すまで、アプリは古いものを使い続けます。
+- **Claude Code** — `unzip presentation-video-vX.Y.Z.zip -d ~/.claude/skills/`
+- **gem-agent / lagent** — `~/.config/gem-agent/skills/` または
+  `~/.config/lagent/skills/` に展開します。リンクではなく写してください。
+  両者のサンドボックスは `~/.claude` を読めないため、そこへのリンクは
+  読み込まれません。
+
+リポジトリからは、`make install-skill` が zip を作って `~/.claude/skills/` に
+展開します（別の場所は `SKILLS_DEST=<dir>`）。`make test` は組織のスキル検証を
+走らせます。`internal/tools/skill_test.go` はスキルとサーバーを照合します。
+全ツールに触れていること、スキルが教える名前がすべてサーバーにあること、
+廃止した名前が無いこと、マニフェストの例が読めることを確かめます
+（[ADR-0010](docs/ja/adr/0010-bundled-presentation-video-skill.ja.md)）。
+
 ## ワークスペースモデル
 
 1ワークスペース = 1デッキ: `<work_dir>/<workspace_id>/`
@@ -203,6 +236,7 @@ SNS 配信に有用。画像は常にレター/ピラーボックスで収める
 - [アーキテクチャ](docs/ja/reference/architecture.ja.md) — モジュール構成・
   レンダリングパイプライン・エラーモデル・テスト戦略。
 - [ADR-0001: 2フェーズレンダリングパイプライン](docs/ja/adr/0001-render-pipeline.ja.md)。
+- [ADR-0010: 同梱の presentation-video スキル](docs/ja/adr/0010-bundled-presentation-video-skill.ja.md)。
 - [RFP](docs/ja/video-studio-mcp-rfp.ja.md) — 承認済みスコープ。設計判断の正典。
 
 ## フォント

@@ -9,9 +9,9 @@ import (
 )
 
 // usageMarkdown is the client-neutral operating manual returned by get_usage:
-// clients without the (future) bundled workflow skill should not have to
+// clients without the bundled presentation-video skill should not have to
 // operate this stateful, file-mediated server by trial and error. Coherence
-// with the real tools/errors/schema is pinned by usage_test.go.
+// with the real tools/errors/schema is pinned by TestUsageCoherence.
 //
 //go:embed usage.md
 var usageMarkdown string
