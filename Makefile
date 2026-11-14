@@ -21,7 +21,7 @@ PLATFORMS := \
 	darwin/arm64 \
 	windows/amd64
 
-.PHONY: build build-all package verify-release verify-skill-zip test package-skill install-skill uninstall-skill clean help
+.PHONY: build build-all package verify-release verify-skill-zip test package-skill install-skill uninstall-skill clean help vuln
 
 ## build: Build binary for the current OS/Arch → ./dist/video-studio-mcp
 build:
@@ -38,13 +38,20 @@ build-all:
 	done
 	@scripts/codesign-darwin.sh $(BIN_DIR)/$(BINARY)-darwin-arm64 "$(CODESIGN_IDENTITY)" "$(BINARY)"
 
+## vuln: known vulnerabilities in the modules and the standard library this
+## build uses (govulncheck). `package` depends on it, so a release cannot be
+## built past a finding. It needs the network, and its database changes under
+## an unchanged tree: a finding can appear without a commit.
+vuln:
+	govulncheck ./...
+
 ## package: Build all platforms, archive with version suffix (zip for
 ## darwin/windows, tar.gz for linux), bundle the canonical binary +
 ## README.md + LICENSE + FONTS_LICENSE (bundled M PLUS 1p caption font),
 ## and notarize the darwin build. Asset naming follows the org Release
 ## Archive Standard (video-studio-mcp-vX.Y.Z-<os>-<arch>.<ext>).
 ## Also builds the skill zip (package-skill): every release carries both.
-package: build-all package-skill
+package: vuln build-all package-skill
 	@cd $(BIN_DIR) && for p in $(PLATFORMS); do os=$${p%/*}; arch=$${p#*/}; \
 		ext=""; [ "$$os" = windows ] && ext=".exe"; \
 		stage=_pkg; rm -rf $$stage; mkdir -p $$stage; \

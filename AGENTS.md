@@ -22,6 +22,7 @@ make test       # go test ./... (hermetic: no ffmpeg needed — faked Runner)
                 # + tests/validate-skill.sh (the organization's skill validator)
 make package    # build-all (4 platforms; darwin arm64 only) + zip/tar.gz + notarize darwin
                 # + package-skill → dist/presentation-video-<version>.zip
+make vuln            # govulncheck over the build; `make package` runs it first and stops on a finding
 make verify-release  # gate: notarized, fresh, runs at this version, clean linux archives,
                      # and the skill zip (verify-skill-zip) — run before upload
 make install-skill   # unpack the skill zip into ~/.claude/skills (SKILLS_DEST=...)
