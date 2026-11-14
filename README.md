@@ -37,7 +37,7 @@ available as `--version`, which prints the same string as `version`.
 
 - **ffmpeg** and **ffprobe** on `PATH` (`brew install ffmpeg`). ffprobe ships
   with ffmpeg and is used to measure each page's audio duration.
-- Go 1.25+ to build.
+- Go 1.27.4+ to build.
 
 ## Install / build
 

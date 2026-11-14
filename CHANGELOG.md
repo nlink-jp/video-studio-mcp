@@ -4,6 +4,26 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.7.1] - 2026-11-14
+
+### Security
+
+- **`golang.org/x/image` is updated from v0.29.0 to v0.46.0.** `govulncheck`
+  reported GO-2026-4962 (a crafted font makes the SFNT parser allocate too
+  much memory) as reachable, and it is: captions are drawn with a parsed
+  font. The only font parsed is the one built into the binary, so nothing a
+  manifest supplies reaches that parser. Nine more advisories in the same
+  module are in image decoders (TIFF, WebP, BMP) this server does not use.
+  The update takes the affected code out of the build.
+
+### Changed
+
+- **Building from source needs Go 1.27.4 or later** (`go.mod`; it was 1.25),
+  the release whose standard library carries the fixes published so far. The
+  binaries of v0.7.0 were built with Go 1.27.3.
+- **`make package` runs the vulnerability check first** (`make vuln`), so a
+  release cannot be built past a finding.
+
 ## [0.7.0] - 2026-11-04
 
 ### Added

@@ -35,7 +35,7 @@ voice-studio-mcp  ─▶  ページ音声 ─┐
 
 - `PATH` に **ffmpeg** と **ffprobe**（`brew install ffmpeg`）。ffprobe は
   ffmpeg に同梱され、各ページの音声長の測定に使う。
-- ビルドに Go 1.25+。
+- ビルドに Go 1.27.4+。
 
 ## インストール / ビルド
 
